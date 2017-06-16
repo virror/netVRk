@@ -18,6 +18,8 @@ public class Menu : MonoBehaviour
 		netvrkManager.connectSuccess += new netVRkEventHandler(OnConnectSuccess);
 		netvrkManager.connectFail += new netVRkEventHandler(OnConnectFail);
 		netvrkManager.disconnect += new netVRkEventHandler(OnDisconnect);
+		netvrkManager.playerJoin += new netVRkPlayerEventHandler(OnPlayerJoin);
+		netvrkManager.playerDisconnect += new netVRkPlayerEventHandler(OnPlayerDisconnect);
 	}
 
 	public void CreateGame()
@@ -53,7 +55,7 @@ public class Menu : MonoBehaviour
 	[netvrkRpc]
 	public void TestRpc(string apa)
 	{
-		Debug.Log(apa);
+		debugText.text = "Rpc: " + apa;
 	}
 
 	private void OnConnectSuccess()
@@ -69,5 +71,15 @@ public class Menu : MonoBehaviour
 	private void OnDisconnect()
 	{
 		debugText.text = "Disconnected.";
+	}
+
+	private void OnPlayerJoin(netvrkPlayer player)
+	{
+		debugText.text = "Player joined: " + player.name;
+	}
+
+	private void OnPlayerDisconnect(netvrkPlayer player)
+	{
+		debugText.text = "Player disconnected: " + player.name;
 	}
 }

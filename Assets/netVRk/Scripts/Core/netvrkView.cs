@@ -6,7 +6,6 @@
 	{
 		Unreliable,
 		Reliable,
-		ReliableBuffered
 	}
 
 	public class netvrkView : MonoBehaviour
