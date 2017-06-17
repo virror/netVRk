@@ -27,6 +27,7 @@
 		private static bool isMasterClient = false;
 		private static bool isConnected = false;
 		private Callback<P2PSessionRequest_t> p2PSessionRequestCallback;
+		private static byte maxPlayers = 0;
 
 		public static event netVRkEventHandler connectSuccess;
 		public static event netVRkEventHandler connectFail;
@@ -180,12 +181,17 @@
 			return isConnected;
 		}
 
+		public byte GetMaxPlayers()
+		{
+			return maxPlayers;
+		}
+
 		public static netvrkPlayer GetMasterClient()
 		{
 			return masterClient;
 		}
 
-		public static void CreateGame()
+		public static void CreateGame(byte maxPlayers)
 		{
 			if(isConnected)
 			{
@@ -195,6 +201,7 @@
 			isMasterClient = true;
 			isConnected = true;
 			masterClient = new netvrkPlayer(SteamUser.GetSteamID());
+			maxPlayers = maxPlayers;
 			instance.StartCoroutine("TickLoop");
 		}
 
@@ -230,6 +237,7 @@
 			}
 			playerList.Clear();
 			masterClient = null;
+			maxPlayers = 0;
 			instance.StopCoroutine("TickLoop");
 		}
 
@@ -304,7 +312,11 @@
 
 		private bool IsExpectingClient(CSteamID clientId)
 		{
-			return SteamFriends.HasFriend(clientId, EFriendFlags.k_EFriendFlagAll) && isConnected;
+			if(playerList.Count + 1 < maxPlayers)
+			{
+				return SteamFriends.HasFriend(clientId, EFriendFlags.k_EFriendFlagAll) && isConnected;
+			}
+			return false;
 		}
 
 		private static EP2PSend netvrkToP2pSend(netvrkSendMethod deliveryMethod)

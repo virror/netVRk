@@ -24,7 +24,7 @@ public class Menu : MonoBehaviour
 
 	public void CreateGame()
 	{
-		netvrkManager.CreateGame();
+		netvrkManager.CreateGame(4);
 	}
 
 	public void JoinGame()
