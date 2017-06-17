@@ -23,8 +23,8 @@
 		private static netvrkManager instance;
 		private static Dictionary<ushort, ObjData> objList = new Dictionary<ushort, ObjData>();
 		private static List<netvrkPlayer> playerList = new List<netvrkPlayer>();
-		private static netvrkPlayer serverPlayer;
-		private static bool isServer = false;
+		private static netvrkPlayer masterClient;
+		private static bool isMasterClient = false;
 		private static bool isConnected = false;
 		private Callback<P2PSessionRequest_t> p2PSessionRequestCallback;
 
@@ -40,7 +40,9 @@
 			ConnectRequest,
 			ConnectResponse,
 			PlayerJoin,
-			PlayerDisconnect
+			PlayerDisconnect,
+			Tick,
+			Tock
 		}
 
 		private struct ObjData
@@ -87,6 +89,10 @@
 
 		public static void SendRpc(ushort objId, string method, object data, netvrkTargets targets, int channel = 0)
 		{
+			if(!isConnected)
+			{
+				Debug.LogWarning("netVRk: Can not send RPCs when not connected!");
+			}
 			int methodId = GetObjMethodId(objId, method);
 			if(methodId < 0)
 			{
@@ -108,6 +114,10 @@
 
 		public static void SendRpc(ushort objId, string method, object data, netvrkPlayer player, int channel = 0)
 		{
+			if(!isConnected)
+			{
+				Debug.LogWarning("netVRk: Can not send RPCs when not connected!");
+			}
 			int methodId = GetObjMethodId(objId, method);
 			if(methodId < 0)
 			{
@@ -126,6 +136,10 @@
 
 		public static void Instantiate(string prefabName, Vector3 position, Quaternion rotation, int channel = 0, object data = null)
 		{
+			if(!isConnected)
+			{
+				Debug.LogWarning("netVRk: Can not instantiate over the network when not connected!");
+			}
 			GameObject go = (GameObject)Resources.Load(prefabName);
 			netvrkView view = go.GetComponent<netvrkView>();
 			if(view == null)
@@ -156,9 +170,9 @@
 			Instantiate(go, position, rotation);
 		}
 
-		public static bool IsServer()
+		public static bool IsMasterClient()
 		{
-			return isServer;
+			return isMasterClient;
 		}
 
 		public static bool IsConnected()
@@ -166,20 +180,31 @@
 			return isConnected;
 		}
 
-		public static netvrkPlayer GetServerPlayer()
+		public static netvrkPlayer GetMasterClient()
 		{
-			return serverPlayer;
+			return masterClient;
 		}
 
 		public static void CreateGame()
 		{
-			isServer = true;
+			if(isConnected)
+			{
+				Debug.LogWarning("netVRk: Can not create a new game while still connected!");
+				return;
+			}
+			isMasterClient = true;
 			isConnected = true;
-			serverPlayer = new netvrkPlayer(SteamUser.GetSteamID());
+			masterClient = new netvrkPlayer(SteamUser.GetSteamID());
+			instance.StartCoroutine("TickLoop");
 		}
 
 		public static void JoinGame(string name)
 		{
+			if(isConnected)
+			{
+				Debug.LogWarning("netVRk: Can not join a new game while still connected!");
+				return;
+			}
 			int friendCount = SteamFriends.GetFriendCount(EFriendFlags.k_EFriendFlagImmediate);
 			for (int i = 0; i < friendCount; ++i)
 			{
@@ -196,13 +221,16 @@
 
 		public static void Disconnect()
 		{
-			isServer = false;
+			isMasterClient = false;
 			isConnected = false;
 
 			for(int i = 0; i < playerList.Count; i++)
 			{
 				SendInternalRpc(playerList[i].steamId, InternalMethod.PlayerDisconnect, SteamUser.GetSteamID().m_SteamID);
 			}
+			playerList.Clear();
+			masterClient = null;
+			instance.StopCoroutine("TickLoop");
 		}
 
 		private void Awake()
@@ -223,6 +251,8 @@
 			data.methods.Add("ConnectionResponse");
 			data.methods.Add("PlayerJoin");
 			data.methods.Add("PlayerDisconnect");
+			data.methods.Add("Tick");
+			data.methods.Add("Tock");
 			objList.Add(0, data);
 		}
 
@@ -372,17 +402,18 @@
 		private IEnumerator ConnectionResponse(InternalData internalData)
 		{
 			CancelInvoke("ConnectionFail");
-			serverPlayer = new netvrkPlayer(internalData.remoteId);
+			masterClient = new netvrkPlayer(internalData.remoteId);
 			isConnected = true;
 
-			if(!IsInPlayerList(serverPlayer.steamId))
+			if(!IsInPlayerList(masterClient.steamId))
 			{
-				playerList.Add(serverPlayer);
+				playerList.Add(masterClient);
 			}
 			if (connectSuccess != null)
             {
                 connectSuccess();
             }
+			StartCoroutine("TickLoop");
 			yield return null;
 		}
 
@@ -401,10 +432,36 @@
 		private IEnumerator PlayerDisconnect(InternalData internalData)
 		{
 			netvrkPlayer newPlayer = new netvrkPlayer(new CSteamID((ulong)internalData.data));
+			if(IsInPlayerList(masterClient.steamId))
+			{
+				playerList.Remove(masterClient);
+			}
 			if (playerDisconnect != null)
             {
                 playerDisconnect(newPlayer);
             }
+			yield return null;
+		}
+
+		private IEnumerator Tick(InternalData internalData)
+		{
+			SendInternalRpc(internalData.remoteId, InternalMethod.Tock);
+			yield return null;
+		}
+
+		private IEnumerator Tock(InternalData internalData)
+		{
+			if(isMasterClient)
+			{
+				for(int i = 0; i < playerList.Count; i++)
+				{
+					playerList[i].tick = true;
+				}
+			}
+			else
+			{
+				masterClient.tick = true;
+			}
 			yield return null;
 		}
 
@@ -414,6 +471,53 @@
             {
                 connectFail();
             }
+		}
+
+		private IEnumerator TickLoop()
+		{
+			while(true)
+			{
+				Debug.Log("Tick");
+				if(isMasterClient)
+				{
+					for(int i = 0; i < playerList.Count; i++)
+					{
+						if(playerList[i].tick)
+						{
+							playerList[i].tick = false;
+							SendInternalRpc(playerList[i].steamId, InternalMethod.Tick);
+						}
+						else
+						{
+							if(IsInPlayerList(masterClient.steamId))
+							{
+								playerList.Remove(masterClient);
+							}
+							for(int j = 0; j < playerList.Count; j++)
+							{
+								SendInternalRpc(playerList[j].steamId, InternalMethod.PlayerDisconnect);
+							}
+						}
+					}
+				}
+				else
+				{
+					if(masterClient.tick)
+					{
+						masterClient.tick = false;
+						SendInternalRpc(masterClient.steamId, InternalMethod.Tick);
+					}
+					else
+					{
+						if(disconnect != null)
+						{
+							disconnect();
+						}
+						Disconnect();
+					}
+				}
+				yield return new WaitForSeconds(10);
+			}
 		}
 
 		private static void SendInternalRpc(CSteamID friendSteamId, InternalMethod intMethod,  object data = null)

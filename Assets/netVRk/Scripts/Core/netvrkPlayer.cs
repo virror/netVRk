@@ -5,6 +5,7 @@
 	{
 		public string name;
 		public CSteamID steamId;
+		public bool tick = true;
 
 		public netvrkPlayer(CSteamID playerId)
 		{
