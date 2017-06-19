@@ -12,6 +12,8 @@
 	{
 		[HideInInspector]
 		public bool isMine = true;
+		public bool isSceneView = true;
+		public object[] instantiateData = null;
 
 		private ushort id = 0;
 
@@ -25,12 +27,12 @@
 			netvrkManager.AddObj(id, this, gameObject);
 		}
 
-		public void Rpc(string method, netvrkTargets targets, object message = null, int channel = 0)
+		public void Rpc(string method, netvrkTargets targets, int channel = 0, params object[] message)
 		{
 			netvrkManager.SendRpc(id, method, message, targets, channel);
 		}
 
-		public void Rpc(string method, netvrkPlayer player, object message = null, int channel = 0)
+		public void Rpc(string method, netvrkPlayer player, int channel = 0, params object[] message)
 		{
 			netvrkManager.SendRpc(id, method, message, player, channel);
 		}

@@ -2,6 +2,8 @@
 {
 	using System;
 	using System.IO;
+	using System.Collections.Generic;
+	using System.Text;
 	using UnityEngine;
 	using Steamworks;
 
@@ -23,7 +25,6 @@
 		Vector3,
 		Vector4,
 		ByteArray,
-		Internal,
 	}
 
 	public class netvrkSerialization : MonoBehaviour
@@ -32,169 +33,203 @@
 		{
 			public ushort objectId;
 			public byte methodId;
-			public netvrkType dataType;
-			public object data;
+			public netvrkType[] dataType;
+			public object[] data;
 		}
-		public static byte[] PackData(ushort objId, byte methodId, object data)
+		public static byte[] PackData(ushort objId, byte methodId, object[] data)
 		{
-			netvrkType type = netvrkType.None;
-			byte[] buffer;
+			List<byte[]> buffer = new List<byte[]>();
+			netvrkType[] type = null;
 			string typeName = "null";
+			int byteSize = 0;
 
 			if(data != null)
 			{
-				typeName = data.GetType().Name;
+				type = new netvrkType[data.Length];
+				for(int i = 0; i < data.Length; i++)
+				{
+					type[i] = netvrkType.None;
+					byte[] tmpBuffer;
+
+					if(data[i] != null)
+					{
+						typeName = data[i].GetType().Name;
+					}
+
+					switch(typeName)
+					{
+						case "Byte":
+							type[i] = netvrkType.Byte;
+							tmpBuffer = BitConverter.GetBytes((byte)data[i]);
+							break;
+						case "Boolean":
+							type[i] = netvrkType.Bool;
+							tmpBuffer = BitConverter.GetBytes((bool)data[i]);
+							break;
+						case "Int16":
+							type[i] = netvrkType.Short;
+							tmpBuffer = BitConverter.GetBytes((short)data[i]);
+							break;
+						case "UInt16":
+							type[i] = netvrkType.UShort;
+							tmpBuffer = BitConverter.GetBytes((ushort)data[i]);
+							break;
+						case "Int32":
+							type[i] = netvrkType.Int;
+							tmpBuffer = BitConverter.GetBytes((int)data[i]);
+							break;
+						case "UInt32":
+							type[i] = netvrkType.UInt;
+							tmpBuffer = BitConverter.GetBytes((uint)data[i]);
+							break;
+						case "Int64":
+							type[i] = netvrkType.Long;
+							tmpBuffer = BitConverter.GetBytes((long)data[i]);
+							break;
+						case "UInt64":
+							type[i] = netvrkType.ULong;
+							tmpBuffer = BitConverter.GetBytes((ulong)data[i]);
+							break;
+						case "Single":
+							type[i] = netvrkType.Float;
+							tmpBuffer = BitConverter.GetBytes((float)data[i]);
+							break;
+						case "Double":
+							type[i] = netvrkType.Double;
+							tmpBuffer = BitConverter.GetBytes((double)data[i]);
+							break;
+						case "String":
+							type[i] = netvrkType.String;
+							string myString = (string)(data[i]);
+							int len = Encoding.UTF8.GetByteCount(myString);
+							tmpBuffer = new byte[len + 2];
+							Buffer.BlockCopy(BitConverter.GetBytes((short)len), 0, tmpBuffer, 0, 2);
+							Encoding.UTF8.GetBytes(myString, 0, myString.Length, tmpBuffer, 2);
+							break;
+						case "Vector2":
+							type[i] = netvrkType.Vector2;
+							tmpBuffer = SerializeVector2((Vector2)data[i]);
+							break;
+						case "Vector3":
+							type[i] = netvrkType.Vector3;
+							tmpBuffer = SerializeVector3((Vector3)data[i]);
+							break;
+						case "Vector4":
+							type[i] = netvrkType.Vector4;
+							tmpBuffer = SerializeVector4((Vector4)data[i]);
+							break;
+						case "Byte[]":
+							type[i] = netvrkType.ByteArray;
+							short len2 = (short)((byte[])data[i]).Length;
+							tmpBuffer = new byte[len2 + 2];
+							Buffer.BlockCopy(BitConverter.GetBytes(len2), 0, tmpBuffer, 0, 2);
+							Buffer.BlockCopy((byte[])data[i], 0, tmpBuffer, 2, len2);
+							break;
+						default:
+							tmpBuffer = new byte[0];
+							break;
+					}
+					buffer.Add(tmpBuffer);
+					byteSize += tmpBuffer.Length + 1;
+				}
 			}
 
-			switch(typeName)
-			{
-				case "Byte":
-					type = netvrkType.Byte;
-					buffer = BitConverter.GetBytes((byte)data);
-					break;
-				case "Boolean":
-					type = netvrkType.Bool;
-					buffer = BitConverter.GetBytes((bool)data);
-					break;
-				case "Int16":
-					type = netvrkType.Short;
-					buffer = BitConverter.GetBytes((short)data);
-					break;
-				case "UInt16":
-					type = netvrkType.UShort;
-					buffer = BitConverter.GetBytes((ushort)data);
-					break;
-				case "Int32":
-					type = netvrkType.Int;
-					buffer = BitConverter.GetBytes((int)data);
-					break;
-				case "UInt32":
-					type = netvrkType.UInt;
-					buffer = BitConverter.GetBytes((uint)data);
-					break;
-				case "Int64":
-					type = netvrkType.Long;
-					buffer = BitConverter.GetBytes((long)data);
-					break;
-				case "UInt64":
-					type = netvrkType.ULong;
-					buffer = BitConverter.GetBytes((ulong)data);
-					break;
-				case "Single":
-					type = netvrkType.Float;
-					buffer = BitConverter.GetBytes((float)data);
-					break;
-				case "Double":
-					type = netvrkType.Double;
-					buffer = BitConverter.GetBytes((double)data);
-					break;
-				case "String":
-					type = netvrkType.String;
-					buffer = System.Text.Encoding.UTF8.GetBytes((string)data);
-					break;
-				case "Vector2":
-					type = netvrkType.Vector2;
-					buffer = SerializeVector2((Vector2)data);
-					break;
-				case "Vector3":
-					type = netvrkType.Vector3;
-					buffer = SerializeVector3((Vector3)data);
-					break;
-				case "Vector4":
-					type = netvrkType.Vector4;
-					buffer = SerializeVector4((Vector4)data);
-					break;
-				case "Byte[]":
-					type = netvrkType.ByteArray;
-					buffer = (byte[])data;
-					break;
-				default:
-					buffer = new byte[0];
-					break;
-			}
-
-			int byteSize = buffer.Length;
-			byte[] bytes = new byte[byteSize + 4];
+			byte[] bytes = new byte[byteSize + 3];
 
 			using (MemoryStream memoryStream = new MemoryStream(bytes))
 			{
 				BinaryWriter bw = new BinaryWriter(memoryStream);
 				bw.Write((short)objId);
 				bw.Write((byte)methodId);
-				bw.Write((byte)type);
-				bw.Write(buffer);
+				if(data != null)
+				{
+					for(int i = 0; i < data.Length; i++)
+					{
+						bw.Write((byte)type[i]);
+						bw.Write(buffer[i]);
+					}
+				}
 			}
 			return bytes;
 		}
 
 		public static unpackOutput UnpackData(byte[] buffer, CSteamID remoteId)
 		{
+			List<object> data = new List<object>();
+			List<netvrkType> type = new List<netvrkType>();
 			unpackOutput output = new unpackOutput();
 			using (MemoryStream memoryStream = new MemoryStream(buffer))
 			{
 				BinaryReader br = new BinaryReader(memoryStream);
 				output.objectId = br.ReadUInt16();
 				output.methodId = br.ReadByte();
-				output.dataType = (netvrkType)memoryStream.ReadByte();
-				object data = null;
-
-				switch(output.dataType)
+				int i = 0;
+				
+				while(memoryStream.Position < memoryStream.Length)
 				{
-					case netvrkType.Byte:
-						data = br.ReadByte();
-						break;
-					case netvrkType.Bool:
-						data = br.ReadBoolean();
-						break;
-					case netvrkType.Short:
-						data = br.ReadInt16();
-						break;
-					case netvrkType.UShort:
-						data = br.ReadUInt16();
-						break;
-					case netvrkType.Int:
-						data = br.ReadInt32();
-						break;
-					case netvrkType.UInt:
-						data = br.ReadUInt32();
-						break;
-					case netvrkType.Long:
-						data = br.ReadInt64();
-						break;
-					case netvrkType.ULong:
-						data = br.ReadUInt64();
-						break;
-					case netvrkType.Float:
-						data = br.ReadSingle();
-						break;
-					case netvrkType.Double:
-						data = br.ReadDouble();
-						break;
-					case netvrkType.String:
-						data = System.Text.Encoding.UTF8.GetString(buffer, 4, buffer.Length - 4);
-						break;
-					case netvrkType.None:
-						break;
-					case netvrkType.Vector2:
-						byte[] tmpBuffer = new byte[8];
-						Buffer.BlockCopy(buffer, 4, tmpBuffer, 0, 8);
-						data = DeserializeVector2(tmpBuffer);
-						break;
-					case netvrkType.Vector3:
-						byte[] tmpBuffer2 = new byte[12];
-						Buffer.BlockCopy(buffer, 4, tmpBuffer2, 0, 12);
-						data = DeserializeVector3(tmpBuffer2);
-						break;
-					case netvrkType.Vector4:
-						byte[] tmpBuffer4 = new byte[16];
-						Buffer.BlockCopy(buffer, 4, tmpBuffer4, 0, 16);
-						data = DeserializeVector4(tmpBuffer4);
-						break;
-					case netvrkType.ByteArray:
-						data = br.ReadBytes((int)memoryStream.Length);
-						break;
+					type.Add((netvrkType)br.ReadByte());
+					object tmpData = null;
+					
+					switch(type[i])
+					{
+						case netvrkType.Byte:
+							tmpData = br.ReadByte();
+							break;
+						case netvrkType.Bool:
+							tmpData = br.ReadBoolean();
+							break;
+						case netvrkType.Short:
+							tmpData = br.ReadInt16();
+							break;
+						case netvrkType.UShort:
+							tmpData = br.ReadUInt16();
+							break;
+						case netvrkType.Int:
+							tmpData = br.ReadInt32();
+							break;
+						case netvrkType.UInt:
+							tmpData = br.ReadUInt32();
+							break;
+						case netvrkType.Long:
+							tmpData = br.ReadInt64();
+							break;
+						case netvrkType.ULong:
+							tmpData = br.ReadUInt64();
+							break;
+						case netvrkType.Float:
+							tmpData = br.ReadSingle();
+							break;
+						case netvrkType.Double:
+							tmpData = br.ReadDouble();
+							break;
+						case netvrkType.String:
+							short len = br.ReadInt16();
+							byte[] tmpBuffer = new byte[len];
+							Buffer.BlockCopy(buffer, (int)memoryStream.Position, tmpBuffer, 0, len);
+							tmpData = Encoding.UTF8.GetString(tmpBuffer);
+							br.ReadBytes(len);
+							break;
+						case netvrkType.None:
+							break;
+						case netvrkType.Vector2:
+							tmpData = DeserializeVector2(br.ReadBytes(8));
+							break;
+						case netvrkType.Vector3:
+							tmpData = DeserializeVector3(br.ReadBytes(12));
+							break;
+						case netvrkType.Vector4:
+							tmpData = DeserializeVector4(br.ReadBytes(16));
+							break;
+						case netvrkType.ByteArray:
+							short len2 = br.ReadInt16();
+							tmpData = br.ReadBytes((int)len2);
+							break;
+					}
+					i++;
+					data.Add(tmpData);
 				}
-				output.data = data;
+				output.data = data.ToArray();
+				output.dataType = type.ToArray();
 			}
 			return output;
 		}

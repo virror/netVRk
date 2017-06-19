@@ -27,7 +27,7 @@
 		private static bool isMasterClient = false;
 		private static bool isConnected = false;
 		private Callback<P2PSessionRequest_t> p2PSessionRequestCallback;
-		private static byte maxPlayers = 0;
+		private static byte maxPlayersAllowed = 0;
 
 		public static event netVRkEventHandler connectSuccess;
 		public static event netVRkEventHandler connectFail;
@@ -54,7 +54,7 @@
 
 		private struct InternalData
 		{
-			public object data;
+			public object[] data;
 			public CSteamID remoteId;
 		}
 
@@ -88,7 +88,7 @@
 			objList.Add(id, data);
 		}
 
-		public static void SendRpc(ushort objId, string method, object data, netvrkTargets targets, int channel = 0)
+		public static void SendRpc(ushort objId, string method, object[] data, netvrkTargets targets, int channel = 0)
 		{
 			if(!isConnected)
 			{
@@ -104,7 +104,7 @@
 			byte[] bytes = netvrkSerialization.PackData(objId, (byte)methodId, data);
 			for(int i = 0; i < playerList.Count; i++)
 			{
-				SteamNetworking.SendP2PPacket(playerList[i].steamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
 			}
 			if(targets == netvrkTargets.All)
 			{
@@ -113,7 +113,7 @@
 			}
 		}
 
-		public static void SendRpc(ushort objId, string method, object data, netvrkPlayer player, int channel = 0)
+		public static void SendRpc(ushort objId, string method, object[] data, netvrkPlayer player, int channel = 0)
 		{
 			if(!isConnected)
 			{
@@ -127,7 +127,7 @@
 			}
 
 			byte[] bytes = netvrkSerialization.PackData(objId, (byte)methodId, data);
-			SteamNetworking.SendP2PPacket(player.steamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
+			SteamNetworking.SendP2PPacket(player.SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
 		}
 
 		public static List<netvrkPlayer> GetPlayerList()
@@ -135,7 +135,7 @@
 			return playerList;
 		}
 
-		public static void Instantiate(string prefabName, Vector3 position, Quaternion rotation, int channel = 0, object data = null)
+		public static void Instantiate(string prefabName, Vector3 position, Quaternion rotation, int channel = 0, params object[] data)
 		{
 			if(!isConnected)
 			{
@@ -149,26 +149,21 @@
 				return;
 			}
 
-			byte[] tmpBuffer = System.Text.Encoding.UTF8.GetBytes(prefabName);
-			byte[] bytes = new byte[tmpBuffer.Length + 28];
-
-			using (MemoryStream memoryStream = new MemoryStream(bytes))
-			{
-				BinaryWriter bw = new BinaryWriter(memoryStream);
-				bw.Write((short)0);
-				bw.Write((byte)InternalMethod.Instantiate);
-				bw.Write((byte)netvrkType.Internal);
-				bw.Write(netvrkSerialization.SerializeVector3(position));
-				bw.Write(netvrkSerialization.SerializeVector3(rotation.eulerAngles));
-				bw.Write(tmpBuffer);
-				// TODO: Handle data
-			}
+			object[] internalData = new object[data.Length + 3];
+			internalData[0] = position;
+			internalData[1] = rotation.eulerAngles;
+			internalData[2] = prefabName;
+			Array.Copy(data, 0, internalData, 3, data.Length);
+			byte[] bytes = netvrkSerialization.PackData(0, (byte)InternalMethod.Instantiate, internalData);
 
 			for(int i = 0; i < playerList.Count; i++)
 			{
-				SteamNetworking.SendP2PPacket(playerList[i].steamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
 			}
-			Instantiate(go, position, rotation);
+
+			GameObject instanceGo = Instantiate(go, position, rotation);
+			netvrkView netView = instanceGo.GetComponent<netvrkView>();
+			netView.instantiateData = data;
 		}
 
 		public static bool IsMasterClient()
@@ -183,7 +178,7 @@
 
 		public byte GetMaxPlayers()
 		{
-			return maxPlayers;
+			return maxPlayersAllowed;
 		}
 
 		public static netvrkPlayer GetMasterClient()
@@ -200,12 +195,12 @@
 			}
 			isMasterClient = true;
 			isConnected = true;
-			masterClient = new netvrkPlayer(SteamUser.GetSteamID());
-			maxPlayers = maxPlayers;
+			masterClient = new netvrkPlayer(SteamUser.GetSteamID(), true, true);
+			maxPlayersAllowed = maxPlayers;
 			instance.StartCoroutine("TickLoop");
 		}
 
-		public static void JoinGame(string name)
+		public static void JoinGame(string steamName)
 		{
 			if(isConnected)
 			{
@@ -218,7 +213,7 @@
 				CSteamID friendSteamId = SteamFriends.GetFriendByIndex(i, EFriendFlags.k_EFriendFlagImmediate);
 				string friendName = SteamFriends.GetFriendPersonaName(friendSteamId);
 
-				if(friendName == name)
+				if(friendName == steamName)
 				{
 					SendInternalRpc(friendSteamId, InternalMethod.ConnectRequest);
 				}
@@ -230,14 +225,15 @@
 		{
 			isMasterClient = false;
 			isConnected = false;
+			object[] data = {SteamUser.GetSteamID().m_SteamID};
 
 			for(int i = 0; i < playerList.Count; i++)
 			{
-				SendInternalRpc(playerList[i].steamId, InternalMethod.PlayerDisconnect, SteamUser.GetSteamID().m_SteamID);
+				SendInternalRpc(playerList[i].SteamId, InternalMethod.PlayerDisconnect, data);
 			}
 			playerList.Clear();
 			masterClient = null;
-			maxPlayers = 0;
+			maxPlayersAllowed = 0;
 			instance.StopCoroutine("TickLoop");
 		}
 
@@ -288,6 +284,7 @@
 		private void OnP2PSessionRequest(P2PSessionRequest_t request)
 		{
 			CSteamID clientId = request.m_steamIDRemote;
+			Debug.Log("OnP2PSessionRequest");
 			if (IsExpectingClient(clientId))
 			{
 				SteamNetworking.AcceptP2PSessionWithUser(clientId);
@@ -298,21 +295,21 @@
 			}
 		}
 
-		private bool IsInPlayerList(CSteamID clientId)
+		private netvrkPlayer IsInPlayerList(CSteamID clientId)
 		{
 			for(int i = 0; i < playerList.Count; i++)
 			{
-				if(playerList[i].steamId == clientId)
+				if(playerList[i].SteamId == clientId)
 				{
-					return true;
+					return playerList[i];
 				}
 			}
-			return false;
+			return null;
 		}
 
 		private bool IsExpectingClient(CSteamID clientId)
 		{
-			if(playerList.Count + 1 < maxPlayers)
+			if(playerList.Count + 1 < maxPlayersAllowed)
 			{
 				return SteamFriends.HasFriend(clientId, EFriendFlags.k_EFriendFlagAll) && isConnected;
 			}
@@ -347,27 +344,30 @@
 		private void UnpackData(byte[] buffer, CSteamID remoteId)
 		{
 			netvrkSerialization.unpackOutput output = netvrkSerialization.UnpackData(buffer, remoteId);
-
 			string methodName = objList[output.objectId].methods[output.methodId];
+
 			if(output.objectId > 0)
 			{
 				GameObject go = objList[output.objectId].netObj.gameObject;
-				go.SendMessage(methodName, output.data, SendMessageOptions.RequireReceiver);
+				MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
+				
+				foreach (MonoBehaviour script in scripts)
+				{
+					Type type = script.GetType();
+					MethodInfo objectField = type.GetMethod(methodName);
+					
+					if(objectField != null)
+					{
+						objectField.Invoke(script, output.data);
+						break;
+					}
+				}
 			}
 			else
 			{
 				InternalData intData = new InternalData();
 				intData.remoteId = remoteId;
-				if(output.dataType == netvrkType.Internal)
-				{
-					byte[] tmpBuffer3 = new byte[33];
-					Buffer.BlockCopy(buffer, 4, tmpBuffer3, 0, buffer.Length - 4);
-					intData.data = tmpBuffer3;
-				}
-				else
-				{
-					intData.data = output.data;
-				}
+				intData.data = output.data;
 				
 				StartCoroutine(methodName, intData);
 			}
@@ -375,38 +375,39 @@
 
 		private IEnumerator InstantiatePrefab(InternalData internalData)
 		{
-			byte[] buffer = (byte[])internalData.data;
-			byte[] tmpBuffer = new byte[12];
-			string prefabName;
-
-			Buffer.BlockCopy(buffer, 0, tmpBuffer, 0, 12);
-			Vector3 position = netvrkSerialization.DeserializeVector3(tmpBuffer);
-			Buffer.BlockCopy(buffer, 12, tmpBuffer, 0, 12);
-			Quaternion rotation = Quaternion.Euler(netvrkSerialization.DeserializeVector3(tmpBuffer));
-
-			prefabName = System.Text.Encoding.UTF8.GetString(buffer, 24, buffer.Length - 24);
-			// TODO: Handle data
+			Vector3 position = (Vector3)internalData.data[0];
+			Quaternion rotation = Quaternion.Euler((Vector3)internalData.data[1]);
+			string prefabName = (string)internalData.data[2];
 
 			GameObject go = (GameObject)Resources.Load(prefabName);
-			go.GetComponent<netvrkView>().isMine = false;
-			Instantiate(go, position, rotation);
-
+			GameObject instanceGo = Instantiate(go, position, rotation);
+			netvrkView netView = instanceGo.GetComponent<netvrkView>();
+			netView.isMine = false;
+			netView.isSceneView = false;
+			int len = internalData.data.Length - 3;
+			if(len > 0)
+			{
+				netView.instantiateData = new object[len];
+				Array.Copy(internalData.data, 3, netView.instantiateData, 0, len);
+			}
 			yield return null;
 		}
 
 		private IEnumerator ConnectionRequest(InternalData internalData)
 		{
 			CSteamID clientId = internalData.remoteId;
+			object[] data = {SteamUser.GetSteamID().m_SteamID};
+			byte[] bytes = netvrkSerialization.PackData(0, (byte)InternalMethod.PlayerJoin, data);
 
 			SendInternalRpc(clientId, InternalMethod.ConnectResponse);
-
+			
 			for(int i = 0; i < playerList.Count; i++)
 			{
-				SendInternalRpc(playerList[i].steamId, InternalMethod.PlayerJoin, clientId.m_SteamID);
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);
 			}
-			if(!IsInPlayerList(clientId))
+			if(IsInPlayerList(clientId) == null)
 			{
-				playerList.Add(new netvrkPlayer(clientId));
+				playerList.Add(new netvrkPlayer(clientId, false, false));
 			}
 			yield return null;
 		}
@@ -414,10 +415,10 @@
 		private IEnumerator ConnectionResponse(InternalData internalData)
 		{
 			CancelInvoke("ConnectionFail");
-			masterClient = new netvrkPlayer(internalData.remoteId);
+			masterClient = new netvrkPlayer(internalData.remoteId, false, true);
 			isConnected = true;
 
-			if(!IsInPlayerList(masterClient.steamId))
+			if(IsInPlayerList(masterClient.SteamId) == null)
 			{
 				playerList.Add(masterClient);
 			}
@@ -431,7 +432,7 @@
 
 		private IEnumerator PlayerJoin(InternalData internalData)
 		{
-			netvrkPlayer newPlayer = new netvrkPlayer(new CSteamID((ulong)internalData.data));
+			netvrkPlayer newPlayer = new netvrkPlayer(new CSteamID((ulong)internalData.data[0]), false, false);
 			playerList.Add(newPlayer);
 			
 			if (playerJoin != null)
@@ -443,15 +444,15 @@
 
 		private IEnumerator PlayerDisconnect(InternalData internalData)
 		{
-			netvrkPlayer newPlayer = new netvrkPlayer(new CSteamID((ulong)internalData.data));
-			if(IsInPlayerList(masterClient.steamId))
+			netvrkPlayer player = IsInPlayerList(new CSteamID((ulong)internalData.data[0]));
+			if(player != null)
 			{
-				playerList.Remove(masterClient);
+				playerList.Remove(player);
+				if (playerDisconnect != null)
+				{
+					playerDisconnect(player);
+				}
 			}
-			if (playerDisconnect != null)
-            {
-                playerDisconnect(newPlayer);
-            }
 			yield return null;
 		}
 
@@ -489,7 +490,6 @@
 		{
 			while(true)
 			{
-				Debug.Log("Tick");
 				if(isMasterClient)
 				{
 					for(int i = 0; i < playerList.Count; i++)
@@ -497,17 +497,17 @@
 						if(playerList[i].tick)
 						{
 							playerList[i].tick = false;
-							SendInternalRpc(playerList[i].steamId, InternalMethod.Tick);
+							SendInternalRpc(playerList[i].SteamId, InternalMethod.Tick);
 						}
 						else
 						{
-							if(IsInPlayerList(masterClient.steamId))
+							if(IsInPlayerList(masterClient.SteamId) != null)
 							{
 								playerList.Remove(masterClient);
 							}
 							for(int j = 0; j < playerList.Count; j++)
 							{
-								SendInternalRpc(playerList[j].steamId, InternalMethod.PlayerDisconnect);
+								SendInternalRpc(playerList[j].SteamId, InternalMethod.PlayerDisconnect);
 							}
 						}
 					}
@@ -517,7 +517,7 @@
 					if(masterClient.tick)
 					{
 						masterClient.tick = false;
-						SendInternalRpc(masterClient.steamId, InternalMethod.Tick);
+						SendInternalRpc(masterClient.SteamId, InternalMethod.Tick);
 					}
 					else
 					{
@@ -532,7 +532,7 @@
 			}
 		}
 
-		private static void SendInternalRpc(CSteamID friendSteamId, InternalMethod intMethod,  object data = null)
+		private static void SendInternalRpc(CSteamID friendSteamId, InternalMethod intMethod,  object[] data = null)
 		{
 			byte[] bytes = netvrkSerialization.PackData(0, (byte)intMethod, data);
 			SteamNetworking.SendP2PPacket(friendSteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);

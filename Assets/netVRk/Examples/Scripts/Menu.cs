@@ -44,18 +44,18 @@ public class Menu : MonoBehaviour
 
 	public void Rpc()
 	{
-		netView.Rpc("TestRpc", netvrkTargets.All, "Rpc test!");
+		netView.Rpc("TestRpc", netvrkTargets.All, 0, "Rpc test!: ", 45);
 	}
 
 	public void Instantiate()
 	{
-		netvrkManager.Instantiate("NetPlayer", new Vector3(2, 1, 3), Quaternion.identity);
+		netvrkManager.Instantiate("NetPlayer", new Vector3(2, 1, 3), Quaternion.identity, 0, "Apa");
 	}
 
 	[netvrkRpc]
-	public void TestRpc(string apa)
+	public void TestRpc(string apa, int bepa)
 	{
-		debugText.text = "Rpc: " + apa;
+		debugText.text = "Rpc: " + apa + bepa;
 	}
 
 	private void OnConnectSuccess()
@@ -75,11 +75,11 @@ public class Menu : MonoBehaviour
 
 	private void OnPlayerJoin(netvrkPlayer player)
 	{
-		debugText.text = "Player joined: " + player.name;
+		debugText.text = "Player joined: " + player.Name;
 	}
 
 	private void OnPlayerDisconnect(netvrkPlayer player)
 	{
-		debugText.text = "Player disconnected: " + player.name;
+		debugText.text = "Player disconnected: " + player.Name;
 	}
 }
