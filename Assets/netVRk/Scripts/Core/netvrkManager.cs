@@ -61,6 +61,8 @@
 		{
 			public netvrkView netObj;
 			public List<string> methods;
+			public List<MethodInfo> objectFields;
+			public List<MonoBehaviour> scripts;
 		}
 
 		private struct InternalData
@@ -80,19 +82,22 @@
 			MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
 			ObjData data = new ObjData();
 			data.methods = new List<string>();
+			data.scripts = new List<MonoBehaviour>();
+			data.objectFields = new List<MethodInfo>();
 			data.netObj = obj;
 
 			foreach (MonoBehaviour script in scripts)
 			{
-				MethodInfo[] objectFields = script.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public);
+				Type type = script.GetType();
+				MethodInfo[] objectFields = type.GetMethods(BindingFlags.Instance | BindingFlags.Public);
 				for (int i = 0; i < objectFields.Length; i++)
 				{
 					netvrkRpc attribute = Attribute.GetCustomAttribute(objectFields[i], typeof(netvrkRpc)) as netvrkRpc;
 					if(attribute != null)
 					{
-						char[] splitters = {' ', '('};
-						string[] strings = objectFields[i].ToString().Split(splitters);
-						data.methods.Add(strings[1]);
+						data.methods.Add(objectFields[i].Name);
+						data.scripts.Add(script);
+						data.objectFields.Add(type.GetMethod(objectFields[i].Name));
 					}
 				}
 			}
@@ -382,22 +387,9 @@
 		private void UnpackRpc(byte[] buffer)
 		{
 			netvrkSerialization.unpackOutput output = netvrkSerialization.UnserializeRpc(buffer);
-			string methodName = objList[output.objectId].methods[output.methodId];
-
-			GameObject go = objList[output.objectId].netObj.gameObject;
-			MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
-			
-			foreach (MonoBehaviour script in scripts)
-			{
-				Type type = script.GetType();
-				MethodInfo objectField = type.GetMethod(methodName);
-				
-				if(objectField != null)
-				{
-					objectField.Invoke(script, output.data);
-					break;
-				}
-			}
+			ObjData data = objList[output.objectId];
+			int id = output.methodId;
+			data.objectFields[id].Invoke(data.scripts[id], output.data);
 		}
 
 		private void UnpackInternal(byte[] buffer, CSteamID remoteId)
