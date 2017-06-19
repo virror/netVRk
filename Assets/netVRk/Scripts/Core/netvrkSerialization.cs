@@ -25,6 +25,8 @@
 		Vector3,
 		Vector4,
 		ByteArray,
+		Color,
+		Color32,
 	}
 
 	public class netvrkSerialization : MonoBehaviour
@@ -125,6 +127,14 @@
 							Buffer.BlockCopy(BitConverter.GetBytes(len2), 0, tmpBuffer, 0, 2);
 							Buffer.BlockCopy((byte[])data[i], 0, tmpBuffer, 2, len2);
 							break;
+						case "Color":
+							type[i] = netvrkType.Color;
+							tmpBuffer = SerializeColor((Color)data[i]);
+							break;
+						case "Color32":
+							type[i] = netvrkType.Color32;
+							tmpBuffer = SerializeColor32((Color32)data[i]);
+							break;
 						default:
 							tmpBuffer = new byte[0];
 							break;
@@ -220,6 +230,12 @@
 						case netvrkType.Vector4:
 							tmpData = DeserializeVector4(br.ReadBytes(16));
 							break;
+						case netvrkType.Color:
+							tmpData = DeserializeColor(br.ReadBytes(12));
+							break;
+						case netvrkType.Color32:
+							tmpData = DeserializeColor32(br.ReadBytes(16));
+							break;
 						case netvrkType.ByteArray:
 							short len2 = br.ReadInt16();
 							tmpData = br.ReadBytes((int)len2);
@@ -267,6 +283,29 @@
 			return buffer;
 		}
 
+		public static byte[] SerializeColor(Color color)
+		{
+			byte[] buffer = new byte[12];
+			
+			Buffer.BlockCopy(BitConverter.GetBytes(color.r), 0, buffer, 0, 4);
+			Buffer.BlockCopy(BitConverter.GetBytes(color.g), 0, buffer, 4, 4);
+			Buffer.BlockCopy(BitConverter.GetBytes(color.b), 0, buffer, 8, 4);
+
+			return buffer;
+		}
+
+		public static byte[] SerializeColor32(Color32 color)
+		{
+			byte[] buffer = new byte[4];
+			
+			buffer[0] = color.r;
+			buffer[1] = color.g;
+			buffer[2] = color.b;
+			buffer[3] = color.a;
+
+			return buffer;
+		}
+
 		public static Vector2 DeserializeVector2(byte[] data)
 		{
 			Vector2 vector;
@@ -304,6 +343,33 @@
 				vector.w = br.ReadSingle();
 			}
 			return vector;
+		}
+
+		public static Color DeserializeColor(byte[] data)
+		{
+			Color color = new Color();
+			using (MemoryStream memoryStream = new MemoryStream(data))
+			{
+				BinaryReader br = new BinaryReader(memoryStream);
+				color.r = br.ReadSingle();
+				color.g = br.ReadSingle();
+				color.b = br.ReadSingle();
+			}
+			return color;
+		}
+
+		public static Color32 DeserializeColor32(byte[] data)
+		{
+			Color32 color = new Color32();
+			using (MemoryStream memoryStream = new MemoryStream(data))
+			{
+				BinaryReader br = new BinaryReader(memoryStream);
+				color.r = br.ReadByte();
+				color.g = br.ReadByte();
+				color.b = br.ReadByte();
+				color.a = br.ReadByte();
+			}
+			return color;
 		}
 	}
 }
