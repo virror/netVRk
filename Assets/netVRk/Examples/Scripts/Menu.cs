@@ -48,6 +48,18 @@ public class Menu : MonoBehaviour
 		netView.Rpc("TestRpc", netvrkTargets.All, 0, new Color32(23, 54, 87, 02));
 	}
 
+	public void Sync()
+	{
+		netvrkStream stream = netView.GetStream();
+		stream.Write(467);
+		netView.WriteSyncStream(stream);
+	}
+
+	public void OnNetvrkReadSyncStream(netvrkStream stream)
+	{
+		Debug.Log(stream.Read(typeof(int)));
+	}
+
 	public void Instantiate()
 	{
 		netvrkManager.Instantiate("NetPlayer", new Vector3(2, 1, 3), Quaternion.identity, 0, "Apa");

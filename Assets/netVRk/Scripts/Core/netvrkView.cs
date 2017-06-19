@@ -15,7 +15,7 @@
 		public bool isSceneView = true;
 		public object[] instantiateData = null;
 
-		private ushort id = 0;
+		public ushort id = 0;
 
 		private void Start ()
 		{
@@ -35,6 +35,16 @@
 		public void Rpc(string method, netvrkPlayer player, int channel = 0, params object[] message)
 		{
 			netvrkManager.SendRpc(id, method, message, player, channel);
+		}
+
+		public netvrkStream GetStream()
+		{
+			return netvrkManager.GetStream(id);
+		}
+
+		public void WriteSyncStream(netvrkStream stream)
+		{
+			netvrkManager.WriteSyncStream(stream);
 		}
 	}
 }

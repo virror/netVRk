@@ -212,6 +212,78 @@
 			return bytes;
 		}
 
+		public static byte[] SerializeSync(object data)
+		{
+			byte[] tmpBuffer;
+			string type = data.GetType().Name;
+
+			switch(type)
+			{
+				case "Byte":
+					tmpBuffer = BitConverter.GetBytes((byte)data);
+					break;
+				case "Boolean":
+					tmpBuffer = BitConverter.GetBytes((bool)data);
+					break;
+				case "Int16":
+					tmpBuffer = BitConverter.GetBytes((short)data);
+					break;
+				case "UInt16":
+					tmpBuffer = BitConverter.GetBytes((ushort)data);
+					break;
+				case "Int32":
+					tmpBuffer = BitConverter.GetBytes((int)data);
+					break;
+				case "UInt32":
+					tmpBuffer = BitConverter.GetBytes((uint)data);
+					break;
+				case "Int64":
+					tmpBuffer = BitConverter.GetBytes((long)data);
+					break;
+				case "UInt64":
+					tmpBuffer = BitConverter.GetBytes((ulong)data);
+					break;
+				case "Single":
+					tmpBuffer = BitConverter.GetBytes((float)data);
+					break;
+				case "Double":
+					tmpBuffer = BitConverter.GetBytes((double)data);
+					break;
+				case "String":
+					string myString = (string)(data);
+					int len = Encoding.UTF8.GetByteCount(myString);
+					tmpBuffer = new byte[len + 2];
+					Buffer.BlockCopy(BitConverter.GetBytes((short)len), 0, tmpBuffer, 0, 2);
+					Encoding.UTF8.GetBytes(myString, 0, myString.Length, tmpBuffer, 2);
+					break;
+				case "Vector2":
+					tmpBuffer = SerializeVector2((Vector2)data);
+					break;
+				case "Vector3":
+					tmpBuffer = SerializeVector3((Vector3)data);
+					break;
+				case "Vector4":
+					tmpBuffer = SerializeVector4((Vector4)data);
+					break;
+				case "Byte[]":
+					short len2 = (short)((byte[])data).Length;
+					tmpBuffer = new byte[len2 + 2];
+					Buffer.BlockCopy(BitConverter.GetBytes(len2), 0, tmpBuffer, 0, 2);
+					Buffer.BlockCopy((byte[])data, 0, tmpBuffer, 2, len2);
+					break;
+				case "Color":
+					tmpBuffer = SerializeColor((Color)data);
+					break;
+				case "Color32":
+					tmpBuffer = SerializeColor32((Color32)data);
+					break;
+				default:
+					tmpBuffer = new byte[0];
+					break;
+			}
+			return tmpBuffer;
+		}
+
 		public static unpackOutput UnserializeEvent(byte[] buffer)
 		{
 			unpackOutput output = new unpackOutput();
@@ -242,7 +314,7 @@
 			unpackOutput output = new unpackOutput();
 			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
 			output.objectId = BitConverter.ToUInt16(buffer, 1);
-			output.methodId = (byte)BitConverter.ToChar(buffer, 2);
+			output.methodId = (byte)BitConverter.ToChar(buffer, 3);
 
 			byte[] tmpBuffer = new byte[buffer.Length - 4];
 			Buffer.BlockCopy(buffer, 4, tmpBuffer, 0, tmpBuffer.Length);
@@ -297,10 +369,8 @@
 							break;
 						case netvrkType.String:
 							short len = br.ReadInt16();
-							byte[] tmpBuffer = new byte[len];
-							Buffer.BlockCopy(buffer, (int)memoryStream.Position, tmpBuffer, 0, len);
+							byte[] tmpBuffer = br.ReadBytes(len);
 							tmpData = Encoding.UTF8.GetString(tmpBuffer);
-							br.ReadBytes(len);
 							break;
 						case netvrkType.None:
 							break;
@@ -329,6 +399,72 @@
 				}
 			}
 			return data.ToArray();
+		}
+
+		public static object UnserializeSync(BinaryReader br, Type type)
+		{
+			object tmpData = null;
+
+			switch(type.Name)
+			{
+				case "Byte":
+					tmpData = br.ReadByte();
+					break;
+				case "Bool":
+					tmpData = br.ReadBoolean();
+					break;
+				case "Int16":
+					tmpData = br.ReadInt16();
+					break;
+				case "UInt16":
+					tmpData = br.ReadUInt16();
+					break;
+				case "Int32":
+					tmpData = br.ReadInt32();
+					break;
+				case "UInt32":
+					tmpData = br.ReadUInt32();
+					break;
+				case "Int64":
+					tmpData = br.ReadInt64();
+					break;
+				case "UInt64":
+					tmpData = br.ReadUInt64();
+					break;
+				case "Single":
+					tmpData = br.ReadSingle();
+					break;
+				case "Double":
+					tmpData = br.ReadDouble();
+					break;
+				case "String":
+					short len = br.ReadInt16();
+					byte[] tmpBuffer = br.ReadBytes(len);
+					tmpData = Encoding.UTF8.GetString(tmpBuffer);
+					break;
+				case "None":
+					break;
+				case "Vector2":
+					tmpData = DeserializeVector2(br.ReadBytes(8));
+					break;
+				case "Vector3":
+					tmpData = DeserializeVector3(br.ReadBytes(12));
+					break;
+				case "Vector4":
+					tmpData = DeserializeVector4(br.ReadBytes(16));
+					break;
+				case "Color":
+					tmpData = DeserializeColor(br.ReadBytes(12));
+					break;
+				case "Color32":
+					tmpData = DeserializeColor32(br.ReadBytes(16));
+					break;
+				case "ByteArray":
+					short len2 = br.ReadInt16();
+					tmpData = br.ReadBytes((int)len2);
+					break;
+			}
+			return tmpData;
 		}
 
 		private static byte[] SerializeVector2(Vector2 vector)

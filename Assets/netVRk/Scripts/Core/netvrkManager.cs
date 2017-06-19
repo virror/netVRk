@@ -61,8 +61,10 @@
 		{
 			public netvrkView netObj;
 			public List<string> methods;
-			public List<MethodInfo> objectFields;
+			public List<MethodInfo> rpcMethods;
 			public List<MonoBehaviour> scripts;
+			public MethodInfo syncMethod;
+			public MonoBehaviour syncScript;
 		}
 
 		private struct InternalData
@@ -83,7 +85,7 @@
 			ObjData data = new ObjData();
 			data.methods = new List<string>();
 			data.scripts = new List<MonoBehaviour>();
-			data.objectFields = new List<MethodInfo>();
+			data.rpcMethods = new List<MethodInfo>();
 			data.netObj = obj;
 
 			foreach (MonoBehaviour script in scripts)
@@ -97,8 +99,14 @@
 					{
 						data.methods.Add(objectFields[i].Name);
 						data.scripts.Add(script);
-						data.objectFields.Add(type.GetMethod(objectFields[i].Name));
+						data.rpcMethods.Add(type.GetMethod(objectFields[i].Name));
 					}
+				}
+				MethodInfo info = type.GetMethod("OnNetvrkReadSyncStream");
+				if(info != null)
+				{
+					data.syncMethod = info;
+					data.syncScript = script;
 				}
 			}
 			objList.Add(id, data);
@@ -271,6 +279,27 @@
 			}
 		}
 
+		public static netvrkStream GetStream(ushort objId)
+		{
+			netvrkStream stream = new netvrkStream(objId);
+			return stream;
+		}
+
+		public static void WriteSyncStream(netvrkStream stream)
+		{
+			byte[] buffer = stream.GetStreamData();
+			byte[] bytes2 = new byte[buffer.Length + 3];
+			byte[] objId = BitConverter.GetBytes(stream.ObjId);
+			bytes2[0] = (byte)eventCode.Sync;
+			bytes2[1] = objId[0];
+			bytes2[2] = objId[1];
+			Buffer.BlockCopy(buffer, 0, bytes2, 3, buffer.Length);
+			for(int i = 0; i < playerList.Count; i++)
+			{
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes2, (uint)bytes2.Length, EP2PSend.k_EP2PSendReliable, 0);
+			}
+		}
+
 		private void Awake()
 		{
 			if (instance != null)
@@ -314,7 +343,7 @@
 							UnpackRpc(buffer);
 							break;
 						case eventCode.Sync:
-							// Sync events
+							UnpackSync(buffer);
 							break;
 						default:
 							UnpackEvent(buffer, remoteId);
@@ -389,7 +418,7 @@
 			netvrkSerialization.unpackOutput output = netvrkSerialization.UnserializeRpc(buffer);
 			ObjData data = objList[output.objectId];
 			int id = output.methodId;
-			data.objectFields[id].Invoke(data.scripts[id], output.data);
+			data.rpcMethods[id].Invoke(data.scripts[id], output.data);
 		}
 
 		private void UnpackInternal(byte[] buffer, CSteamID remoteId)
@@ -412,6 +441,17 @@
             {
                 eventCall(output.eventId, output.data, player);
             }
+		}
+
+		private void UnpackSync(byte[] buffer)
+		{
+			ushort objId = BitConverter.ToUInt16(buffer, 1);
+			byte[] tmpBuffer = new byte[buffer.Length - 3];
+			Buffer.BlockCopy(buffer, 3, tmpBuffer, 0, tmpBuffer.Length);
+
+			netvrkStream stream = new netvrkStream(tmpBuffer);
+			object[] objs = {stream};
+			objList[objId].syncMethod.Invoke(objList[objId].syncScript, objs);
 		}
 
 		private IEnumerator InstantiatePrefab(InternalData internalData)
