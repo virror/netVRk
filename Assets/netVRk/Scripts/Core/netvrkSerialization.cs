@@ -33,154 +33,237 @@
 	{
 		public struct unpackOutput
 		{
+			public byte eventId;
 			public ushort objectId;
 			public byte methodId;
-			public netvrkType[] dataType;
 			public object[] data;
 		}
-		public static byte[] PackData(ushort objId, byte methodId, object[] data)
-		{
-			List<byte[]> buffer = new List<byte[]>();
-			netvrkType[] type = null;
-			string typeName = "null";
-			int byteSize = 0;
 
+		public static byte[] SerializeEvent(byte eventCode, object[] data)
+		{
+			byte[] bytes = new byte[0];
+			
 			if(data != null)
 			{
-				type = new netvrkType[data.Length];
-				for(int i = 0; i < data.Length; i++)
-				{
-					type[i] = netvrkType.None;
-					byte[] tmpBuffer;
-
-					if(data[i] != null)
-					{
-						typeName = data[i].GetType().Name;
-					}
-
-					switch(typeName)
-					{
-						case "Byte":
-							type[i] = netvrkType.Byte;
-							tmpBuffer = BitConverter.GetBytes((byte)data[i]);
-							break;
-						case "Boolean":
-							type[i] = netvrkType.Bool;
-							tmpBuffer = BitConverter.GetBytes((bool)data[i]);
-							break;
-						case "Int16":
-							type[i] = netvrkType.Short;
-							tmpBuffer = BitConverter.GetBytes((short)data[i]);
-							break;
-						case "UInt16":
-							type[i] = netvrkType.UShort;
-							tmpBuffer = BitConverter.GetBytes((ushort)data[i]);
-							break;
-						case "Int32":
-							type[i] = netvrkType.Int;
-							tmpBuffer = BitConverter.GetBytes((int)data[i]);
-							break;
-						case "UInt32":
-							type[i] = netvrkType.UInt;
-							tmpBuffer = BitConverter.GetBytes((uint)data[i]);
-							break;
-						case "Int64":
-							type[i] = netvrkType.Long;
-							tmpBuffer = BitConverter.GetBytes((long)data[i]);
-							break;
-						case "UInt64":
-							type[i] = netvrkType.ULong;
-							tmpBuffer = BitConverter.GetBytes((ulong)data[i]);
-							break;
-						case "Single":
-							type[i] = netvrkType.Float;
-							tmpBuffer = BitConverter.GetBytes((float)data[i]);
-							break;
-						case "Double":
-							type[i] = netvrkType.Double;
-							tmpBuffer = BitConverter.GetBytes((double)data[i]);
-							break;
-						case "String":
-							type[i] = netvrkType.String;
-							string myString = (string)(data[i]);
-							int len = Encoding.UTF8.GetByteCount(myString);
-							tmpBuffer = new byte[len + 2];
-							Buffer.BlockCopy(BitConverter.GetBytes((short)len), 0, tmpBuffer, 0, 2);
-							Encoding.UTF8.GetBytes(myString, 0, myString.Length, tmpBuffer, 2);
-							break;
-						case "Vector2":
-							type[i] = netvrkType.Vector2;
-							tmpBuffer = SerializeVector2((Vector2)data[i]);
-							break;
-						case "Vector3":
-							type[i] = netvrkType.Vector3;
-							tmpBuffer = SerializeVector3((Vector3)data[i]);
-							break;
-						case "Vector4":
-							type[i] = netvrkType.Vector4;
-							tmpBuffer = SerializeVector4((Vector4)data[i]);
-							break;
-						case "Byte[]":
-							type[i] = netvrkType.ByteArray;
-							short len2 = (short)((byte[])data[i]).Length;
-							tmpBuffer = new byte[len2 + 2];
-							Buffer.BlockCopy(BitConverter.GetBytes(len2), 0, tmpBuffer, 0, 2);
-							Buffer.BlockCopy((byte[])data[i], 0, tmpBuffer, 2, len2);
-							break;
-						case "Color":
-							type[i] = netvrkType.Color;
-							tmpBuffer = SerializeColor((Color)data[i]);
-							break;
-						case "Color32":
-							type[i] = netvrkType.Color32;
-							tmpBuffer = SerializeColor32((Color32)data[i]);
-							break;
-						default:
-							tmpBuffer = new byte[0];
-							break;
-					}
-					buffer.Add(tmpBuffer);
-					byteSize += tmpBuffer.Length + 1;
-				}
+				bytes = SerializeData(data);
 			}
 
-			byte[] bytes = new byte[byteSize + 3];
+			byte[] bytes2 = new byte[bytes.Length + 1];
+			bytes2[0] = eventCode;
+			Buffer.BlockCopy(bytes, 0, bytes2, 1, bytes.Length);
+
+			return bytes2;
+		}
+
+		public static byte[] SerializeInternal(byte methodId, object[] data)
+		{
+			byte[] bytes = new byte[0];
+			
+			if(data != null)
+			{
+				bytes = SerializeData(data);
+			}
+			byte[] bytes2 = new byte[bytes.Length + 2];
+
+			bytes2[0] = (byte)eventCode.Internal;
+			bytes2[1] = methodId;
+			Buffer.BlockCopy(bytes, 0, bytes2, 2, bytes.Length);
+
+			return bytes2;
+		}
+
+		public static byte[] SerializeRpc(ushort objId, byte methodId, object[] data)
+		{
+			byte[] bytes = new byte[0];
+			
+			if(data != null)
+			{
+				bytes = SerializeData(data);
+			}
+			byte[] bytes2 = new byte[bytes.Length + 4];
+
+			using (MemoryStream memoryStream = new MemoryStream(bytes2))
+			{
+				BinaryWriter bw = new BinaryWriter(memoryStream);
+				bw.Write((byte)eventCode.Rpc);
+				bw.Write(objId);
+				bw.Write(methodId);
+				if(data != null)
+				{
+					bw.Write(bytes);
+				}
+			}
+			return bytes2;
+		}
+
+		public static byte[] SerializeData(object[] data)
+		{
+			netvrkType[] type = new netvrkType[data.Length];
+			List<byte[]> buffer = new List<byte[]>();
+			string typeName = "null";
+			int byteSize = 0;
+			
+			for(int i = 0; i < data.Length; i++)
+			{
+				type[i] = netvrkType.None;
+				byte[] tmpBuffer;
+
+				if(data[i] != null)
+				{
+					typeName = data[i].GetType().Name;
+				}
+
+				switch(typeName)
+				{
+					case "Byte":
+						type[i] = netvrkType.Byte;
+						tmpBuffer = BitConverter.GetBytes((byte)data[i]);
+						break;
+					case "Boolean":
+						type[i] = netvrkType.Bool;
+						tmpBuffer = BitConverter.GetBytes((bool)data[i]);
+						break;
+					case "Int16":
+						type[i] = netvrkType.Short;
+						tmpBuffer = BitConverter.GetBytes((short)data[i]);
+						break;
+					case "UInt16":
+						type[i] = netvrkType.UShort;
+						tmpBuffer = BitConverter.GetBytes((ushort)data[i]);
+						break;
+					case "Int32":
+						type[i] = netvrkType.Int;
+						tmpBuffer = BitConverter.GetBytes((int)data[i]);
+						break;
+					case "UInt32":
+						type[i] = netvrkType.UInt;
+						tmpBuffer = BitConverter.GetBytes((uint)data[i]);
+						break;
+					case "Int64":
+						type[i] = netvrkType.Long;
+						tmpBuffer = BitConverter.GetBytes((long)data[i]);
+						break;
+					case "UInt64":
+						type[i] = netvrkType.ULong;
+						tmpBuffer = BitConverter.GetBytes((ulong)data[i]);
+						break;
+					case "Single":
+						type[i] = netvrkType.Float;
+						tmpBuffer = BitConverter.GetBytes((float)data[i]);
+						break;
+					case "Double":
+						type[i] = netvrkType.Double;
+						tmpBuffer = BitConverter.GetBytes((double)data[i]);
+						break;
+					case "String":
+						type[i] = netvrkType.String;
+						string myString = (string)(data[i]);
+						int len = Encoding.UTF8.GetByteCount(myString);
+						tmpBuffer = new byte[len + 2];
+						Buffer.BlockCopy(BitConverter.GetBytes((short)len), 0, tmpBuffer, 0, 2);
+						Encoding.UTF8.GetBytes(myString, 0, myString.Length, tmpBuffer, 2);
+						break;
+					case "Vector2":
+						type[i] = netvrkType.Vector2;
+						tmpBuffer = SerializeVector2((Vector2)data[i]);
+						break;
+					case "Vector3":
+						type[i] = netvrkType.Vector3;
+						tmpBuffer = SerializeVector3((Vector3)data[i]);
+						break;
+					case "Vector4":
+						type[i] = netvrkType.Vector4;
+						tmpBuffer = SerializeVector4((Vector4)data[i]);
+						break;
+					case "Byte[]":
+						type[i] = netvrkType.ByteArray;
+						short len2 = (short)((byte[])data[i]).Length;
+						tmpBuffer = new byte[len2 + 2];
+						Buffer.BlockCopy(BitConverter.GetBytes(len2), 0, tmpBuffer, 0, 2);
+						Buffer.BlockCopy((byte[])data[i], 0, tmpBuffer, 2, len2);
+						break;
+					case "Color":
+						type[i] = netvrkType.Color;
+						tmpBuffer = SerializeColor((Color)data[i]);
+						break;
+					case "Color32":
+						type[i] = netvrkType.Color32;
+						tmpBuffer = SerializeColor32((Color32)data[i]);
+						break;
+					default:
+						tmpBuffer = new byte[0];
+						break;
+				}
+				buffer.Add(tmpBuffer);
+				byteSize += tmpBuffer.Length + 1;
+			}
+
+			byte[] bytes = new byte[byteSize + 1];
 
 			using (MemoryStream memoryStream = new MemoryStream(bytes))
 			{
 				BinaryWriter bw = new BinaryWriter(memoryStream);
-				bw.Write((short)objId);
-				bw.Write((byte)methodId);
-				if(data != null)
+				for(int i = 0; i < data.Length; i++)
 				{
-					for(int i = 0; i < data.Length; i++)
-					{
-						bw.Write((byte)type[i]);
-						bw.Write(buffer[i]);
-					}
+					bw.Write((byte)type[i]);
+					bw.Write(buffer[i]);
 				}
 			}
 			return bytes;
 		}
 
-		public static unpackOutput UnpackData(byte[] buffer, CSteamID remoteId)
+		public static unpackOutput UnserializeEvent(byte[] buffer)
 		{
-			List<object> data = new List<object>();
-			List<netvrkType> type = new List<netvrkType>();
 			unpackOutput output = new unpackOutput();
+			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
+
+			byte[] tmpBuffer = new byte[buffer.Length - 1];
+			Buffer.BlockCopy(buffer, 1, tmpBuffer, 0, tmpBuffer.Length);
+			output.data = UnserializeData(tmpBuffer);
+
+			return output;
+		}
+
+		public static unpackOutput UnserializeInternal(byte[] buffer)
+		{
+			unpackOutput output = new unpackOutput();
+			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
+			output.methodId = (byte)BitConverter.ToChar(buffer, 1);
+
+			byte[] tmpBuffer = new byte[buffer.Length - 2];
+			Buffer.BlockCopy(buffer, 2, tmpBuffer, 0, tmpBuffer.Length);
+			output.data = UnserializeData(tmpBuffer);
+
+			return output;
+		}
+
+		public static unpackOutput UnserializeRpc(byte[] buffer)
+		{
+			unpackOutput output = new unpackOutput();
+			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
+			output.objectId = BitConverter.ToUInt16(buffer, 1);
+			output.methodId = (byte)BitConverter.ToChar(buffer, 2);
+
+			byte[] tmpBuffer = new byte[buffer.Length - 4];
+			Buffer.BlockCopy(buffer, 4, tmpBuffer, 0, tmpBuffer.Length);
+			output.data = UnserializeData(tmpBuffer);
+
+			return output;
+		}
+
+		public static object[] UnserializeData(byte[] buffer)
+		{
+			int i = 0;
+			List<object> data = new List<object>();
 			using (MemoryStream memoryStream = new MemoryStream(buffer))
 			{
 				BinaryReader br = new BinaryReader(memoryStream);
-				output.objectId = br.ReadUInt16();
-				output.methodId = br.ReadByte();
-				int i = 0;
-				
 				while(memoryStream.Position < memoryStream.Length)
 				{
-					type.Add((netvrkType)br.ReadByte());
+					netvrkType type = (netvrkType)br.ReadByte();
 					object tmpData = null;
-					
-					switch(type[i])
+
+					switch(type)
 					{
 						case netvrkType.Byte:
 							tmpData = br.ReadByte();
@@ -244,13 +327,11 @@
 					i++;
 					data.Add(tmpData);
 				}
-				output.data = data.ToArray();
-				output.dataType = type.ToArray();
 			}
-			return output;
+			return data.ToArray();
 		}
 
-		public static byte[] SerializeVector2(Vector2 vector)
+		private static byte[] SerializeVector2(Vector2 vector)
 		{
 			byte[] buffer = new byte[8];
 			
@@ -260,7 +341,7 @@
 			return buffer;
 		}
 
-		public static byte[] SerializeVector3(Vector3 vector)
+		private static byte[] SerializeVector3(Vector3 vector)
 		{
 			byte[] buffer = new byte[12];
 			
@@ -271,7 +352,7 @@
 			return buffer;
 		}
 
-		public static byte[] SerializeVector4(Vector4 vector)
+		private static byte[] SerializeVector4(Vector4 vector)
 		{
 			byte[] buffer = new byte[16];
 			
@@ -283,7 +364,7 @@
 			return buffer;
 		}
 
-		public static byte[] SerializeColor(Color color)
+		private static byte[] SerializeColor(Color color)
 		{
 			byte[] buffer = new byte[12];
 			
@@ -294,7 +375,7 @@
 			return buffer;
 		}
 
-		public static byte[] SerializeColor32(Color32 color)
+		private static byte[] SerializeColor32(Color32 color)
 		{
 			byte[] buffer = new byte[4];
 			
@@ -306,7 +387,7 @@
 			return buffer;
 		}
 
-		public static Vector2 DeserializeVector2(byte[] data)
+		private static Vector2 DeserializeVector2(byte[] data)
 		{
 			Vector2 vector;
 			using (MemoryStream memoryStream = new MemoryStream(data))
@@ -318,7 +399,7 @@
 			return vector;
 		}
 
-		public static Vector3 DeserializeVector3(byte[] data)
+		private static Vector3 DeserializeVector3(byte[] data)
 		{
 			Vector3 vector;
 			using (MemoryStream memoryStream = new MemoryStream(data))
@@ -331,7 +412,7 @@
 			return vector;
 		}
 
-		public static Vector4 DeserializeVector4(byte[] data)
+		private static Vector4 DeserializeVector4(byte[] data)
 		{
 			Vector4 vector;
 			using (MemoryStream memoryStream = new MemoryStream(data))
@@ -345,7 +426,7 @@
 			return vector;
 		}
 
-		public static Color DeserializeColor(byte[] data)
+		private static Color DeserializeColor(byte[] data)
 		{
 			Color color = new Color();
 			using (MemoryStream memoryStream = new MemoryStream(data))
@@ -358,7 +439,7 @@
 			return color;
 		}
 
-		public static Color32 DeserializeColor32(byte[] data)
+		private static Color32 DeserializeColor32(byte[] data)
 		{
 			Color32 color = new Color32();
 			using (MemoryStream memoryStream = new MemoryStream(data))

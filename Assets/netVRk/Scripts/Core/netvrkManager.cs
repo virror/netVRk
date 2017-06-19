@@ -9,12 +9,21 @@
 	using Steamworks;
 
 	public delegate void netVRkPlayerEventHandler(netvrkPlayer player);
-	public delegate void netVRkEventHandler();
+	public delegate void netVRkConnectionHandler();
+	public delegate void netVRkEventHandler(byte eventCode, object[] data, netvrkPlayer player);
 
 	public enum netvrkTargets
 	{
 		All,
 		Other
+	}
+
+	public enum eventCode
+	{
+		Internal,
+		Rpc,
+		Sync,
+		End
 	}
 
 	public class netvrkManager : MonoBehaviour
@@ -29,11 +38,13 @@
 		private Callback<P2PSessionRequest_t> p2PSessionRequestCallback;
 		private static byte maxPlayersAllowed = 0;
 
-		public static event netVRkEventHandler connectSuccess;
-		public static event netVRkEventHandler connectFail;
-		public static event netVRkEventHandler disconnect;
+		//Events
+		public static event netVRkConnectionHandler connectSuccess;
+		public static event netVRkConnectionHandler connectFail;
+		public static event netVRkConnectionHandler disconnect;
 		public static event netVRkPlayerEventHandler playerJoin;
 		public static event netVRkPlayerEventHandler playerDisconnect;
+		public static event netVRkEventHandler eventCall;
 
 		public enum InternalMethod
 		{
@@ -93,6 +104,7 @@
 			if(!isConnected)
 			{
 				Debug.LogWarning("netVRk: Can not send RPCs when not connected!");
+				return;
 			}
 			int methodId = GetObjMethodId(objId, method);
 			if(methodId < 0)
@@ -101,7 +113,7 @@
 				return;
 			}
 
-			byte[] bytes = netvrkSerialization.PackData(objId, (byte)methodId, data);
+			byte[] bytes = netvrkSerialization.SerializeRpc(objId, (byte)methodId, data);
 			for(int i = 0; i < playerList.Count; i++)
 			{
 				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
@@ -118,6 +130,7 @@
 			if(!isConnected)
 			{
 				Debug.LogWarning("netVRk: Can not send RPCs when not connected!");
+				return;
 			}
 			int methodId = GetObjMethodId(objId, method);
 			if(methodId < 0)
@@ -126,7 +139,7 @@
 				return;
 			}
 
-			byte[] bytes = netvrkSerialization.PackData(objId, (byte)methodId, data);
+			byte[] bytes = netvrkSerialization.SerializeRpc(objId, (byte)methodId, data);
 			SteamNetworking.SendP2PPacket(player.SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, channel);
 		}
 
@@ -140,6 +153,7 @@
 			if(!isConnected)
 			{
 				Debug.LogWarning("netVRk: Can not instantiate over the network when not connected!");
+				return;
 			}
 			GameObject go = (GameObject)Resources.Load(prefabName);
 			netvrkView view = go.GetComponent<netvrkView>();
@@ -154,7 +168,7 @@
 			internalData[1] = rotation.eulerAngles;
 			internalData[2] = prefabName;
 			Array.Copy(data, 0, internalData, 3, data.Length);
-			byte[] bytes = netvrkSerialization.PackData(0, (byte)InternalMethod.Instantiate, internalData);
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.Instantiate, internalData);
 
 			for(int i = 0; i < playerList.Count; i++)
 			{
@@ -237,6 +251,21 @@
 			instance.StopCoroutine("TickLoop");
 		}
 
+		public static void RaiseEvent(byte eventId, netvrkSendMethod method, params object[] data)
+		{
+			if(!isConnected)
+			{
+				Debug.LogWarning("netVRk: Can not send events when not connected!");
+				return;
+			}
+			eventId += (byte)eventCode.End;
+			byte[] bytes = netvrkSerialization.SerializeEvent(eventId, data);
+			for(int i = 0; i < playerList.Count; i++)
+			{
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);
+			}
+		}
+
 		private void Awake()
 		{
 			if (instance != null)
@@ -262,11 +291,6 @@
 
 		private void Update()
 		{
-			if (!Application.isPlaying)
-			{
-				return;
-			}
-
 			uint size;
 			while (SteamNetworking.IsP2PPacketAvailable(out size))
 			{
@@ -276,7 +300,21 @@
  
 				if (SteamNetworking.ReadP2PPacket(buffer, size, out bytesRead, out remoteId))
 				{
-					UnpackData(buffer, remoteId);
+					switch((eventCode)buffer[0])
+					{
+						case eventCode.Internal:
+							UnpackInternal(buffer, remoteId);
+							break;
+						case eventCode.Rpc:
+							UnpackRpc(buffer);
+							break;
+						case eventCode.Sync:
+							// Sync events
+							break;
+						default:
+							UnpackEvent(buffer, remoteId);
+							break;
+					}
 				}
 			}
 		}
@@ -341,36 +379,47 @@
 			return -1;
 		}
 
-		private void UnpackData(byte[] buffer, CSteamID remoteId)
+		private void UnpackRpc(byte[] buffer)
 		{
-			netvrkSerialization.unpackOutput output = netvrkSerialization.UnpackData(buffer, remoteId);
+			netvrkSerialization.unpackOutput output = netvrkSerialization.UnserializeRpc(buffer);
 			string methodName = objList[output.objectId].methods[output.methodId];
 
-			if(output.objectId > 0)
+			GameObject go = objList[output.objectId].netObj.gameObject;
+			MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
+			
+			foreach (MonoBehaviour script in scripts)
 			{
-				GameObject go = objList[output.objectId].netObj.gameObject;
-				MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
+				Type type = script.GetType();
+				MethodInfo objectField = type.GetMethod(methodName);
 				
-				foreach (MonoBehaviour script in scripts)
+				if(objectField != null)
 				{
-					Type type = script.GetType();
-					MethodInfo objectField = type.GetMethod(methodName);
-					
-					if(objectField != null)
-					{
-						objectField.Invoke(script, output.data);
-						break;
-					}
+					objectField.Invoke(script, output.data);
+					break;
 				}
 			}
-			else
-			{
-				InternalData intData = new InternalData();
-				intData.remoteId = remoteId;
-				intData.data = output.data;
-				
-				StartCoroutine(methodName, intData);
-			}
+		}
+
+		private void UnpackInternal(byte[] buffer, CSteamID remoteId)
+		{
+			netvrkSerialization.unpackOutput output = netvrkSerialization.UnserializeInternal(buffer);
+			string methodName = objList[0].methods[output.methodId];
+
+			InternalData intData = new InternalData();
+			intData.remoteId = remoteId;
+			intData.data = output.data;
+			
+			StartCoroutine(methodName, intData);
+		}
+
+		private void UnpackEvent(byte[] buffer, CSteamID remoteId)
+		{
+			netvrkSerialization.unpackOutput output = netvrkSerialization.UnserializeEvent(buffer);
+			netvrkPlayer player = IsInPlayerList(remoteId);
+			if (eventCall != null)
+            {
+                eventCall(output.eventId, output.data, player);
+            }
 		}
 
 		private IEnumerator InstantiatePrefab(InternalData internalData)
@@ -397,7 +446,7 @@
 		{
 			CSteamID clientId = internalData.remoteId;
 			object[] data = {SteamUser.GetSteamID().m_SteamID};
-			byte[] bytes = netvrkSerialization.PackData(0, (byte)InternalMethod.PlayerJoin, data);
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.PlayerJoin, data);
 
 			SendInternalRpc(clientId, InternalMethod.ConnectResponse);
 			
@@ -534,7 +583,7 @@
 
 		private static void SendInternalRpc(CSteamID friendSteamId, InternalMethod intMethod,  object[] data = null)
 		{
-			byte[] bytes = netvrkSerialization.PackData(0, (byte)intMethod, data);
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)intMethod, data);
 			SteamNetworking.SendP2PPacket(friendSteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);
 		}
 	}
