@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using netvrk;
 
 public class Menu : MonoBehaviour
 {
 	private InputField steamInput;
 	private Text debugText;
-	netvrkView netView;
+	private netvrkView netView;
 
 	private void Awake()
 	{
@@ -78,7 +79,7 @@ public class Menu : MonoBehaviour
 
 	private void OnConnectSuccess()
 	{
-		debugText.text = "Connection successful.";
+		SceneManager.LoadScene("Main");
 	}
 
 	private void OnConnectFail()
@@ -93,7 +94,7 @@ public class Menu : MonoBehaviour
 
 	private void OnPlayerJoin(netvrkPlayer player)
 	{
-		debugText.text = "Player joined: " + player.Name;
+		SceneManager.LoadScene("Main");
 	}
 
 	private void OnPlayerDisconnect(netvrkPlayer player)
