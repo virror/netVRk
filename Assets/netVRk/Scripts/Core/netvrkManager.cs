@@ -1,6 +1,7 @@
 ﻿namespace netvrk
 {
 	using UnityEngine;
+	using UnityEngine.SceneManagement;
 	using System;
 	using System.IO;
 	using System.Reflection;
@@ -35,7 +36,6 @@
 		private static netvrkPlayer masterClient;
 		private static bool isMasterClient = false;
 		private static bool isConnected = false;
-		private Callback<P2PSessionRequest_t> p2PSessionRequestCallback;
 		private static byte maxPlayersAllowed = 0;
 
 		//Events
@@ -73,7 +73,7 @@
 			public CSteamID remoteId;
 		}
 
-		public static ushort GetNewId()
+		public static ushort GetNewViewId()
 		{
 			instance.maxId++;
 			return instance.maxId;
@@ -308,8 +308,9 @@
 				return;
 			}
 			instance = this;
+			DontDestroyOnLoad(gameObject);
 
-			p2PSessionRequestCallback = Callback<P2PSessionRequest_t>.Create(OnP2PSessionRequest);
+			Callback<P2PSessionRequest_t>.Create(OnP2PSessionRequest);
 			ObjData data = new ObjData();
 			data.netObj = null;
 			data.methods = new List<string>();
@@ -321,6 +322,8 @@
 			data.methods.Add("Tick");
 			data.methods.Add("Tock");
 			objList.Add(0, data);
+
+			SceneManager.activeSceneChanged += OnActiveSceneChanged;
 		}
 
 		private void Update()
@@ -356,7 +359,6 @@
 		private void OnP2PSessionRequest(P2PSessionRequest_t request)
 		{
 			CSteamID clientId = request.m_steamIDRemote;
-			Debug.Log("OnP2PSessionRequest");
 			if (IsExpectingClient(clientId))
 			{
 				SteamNetworking.AcceptP2PSessionWithUser(clientId);
@@ -377,6 +379,11 @@
 				}
 			}
 			return null;
+		}
+
+		private void OnActiveSceneChanged(Scene arg0, Scene arg1)
+		{
+			
 		}
 
 		private bool IsExpectingClient(CSteamID clientId)
@@ -479,6 +486,7 @@
 			CSteamID clientId = internalData.remoteId;
 			object[] data = {SteamUser.GetSteamID().m_SteamID};
 			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.PlayerJoin, data);
+			netvrkPlayer newPlayer = new netvrkPlayer(clientId, false, false);
 
 			SendInternalRpc(clientId, InternalMethod.ConnectResponse);
 			
@@ -488,8 +496,12 @@
 			}
 			if(IsInPlayerList(clientId) == null)
 			{
-				playerList.Add(new netvrkPlayer(clientId, false, false));
+				playerList.Add(newPlayer);
 			}
+			if (playerJoin != null)
+            {
+                playerJoin(newPlayer);
+            }
 			yield return null;
 		}
 

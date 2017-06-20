@@ -21,7 +21,7 @@
 		{
 			if(id == 0)
 			{
-				id = netvrkManager.GetNewId();
+				id = netvrkManager.GetNewViewId();
 			}
 
 			netvrkManager.AddObj(id, this, gameObject);

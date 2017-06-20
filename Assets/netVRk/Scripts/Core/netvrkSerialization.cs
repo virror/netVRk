@@ -295,7 +295,7 @@
 		public static unpackOutput UnserializeEvent(byte[] buffer)
 		{
 			unpackOutput output = new unpackOutput();
-			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
+			output.eventId = buffer[0];
 
 			byte[] tmpBuffer = new byte[buffer.Length - 1];
 			Buffer.BlockCopy(buffer, 1, tmpBuffer, 0, tmpBuffer.Length);
@@ -307,8 +307,8 @@
 		public static unpackOutput UnserializeInternal(byte[] buffer)
 		{
 			unpackOutput output = new unpackOutput();
-			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
-			output.methodId = (byte)BitConverter.ToChar(buffer, 1);
+			output.eventId = buffer[0];
+			output.methodId = buffer[1];
 
 			byte[] tmpBuffer = new byte[buffer.Length - 2];
 			Buffer.BlockCopy(buffer, 2, tmpBuffer, 0, tmpBuffer.Length);
@@ -320,9 +320,9 @@
 		public static unpackOutput UnserializeRpc(byte[] buffer)
 		{
 			unpackOutput output = new unpackOutput();
-			output.eventId = (byte)BitConverter.ToChar(buffer, 0);
+			output.eventId = buffer[0];
 			output.objectId = BitConverter.ToUInt16(buffer, 1);
-			output.methodId = (byte)BitConverter.ToChar(buffer, 3);
+			output.methodId = buffer[3];
 
 			byte[] tmpBuffer = new byte[buffer.Length - 4];
 			Buffer.BlockCopy(buffer, 4, tmpBuffer, 0, tmpBuffer.Length);
