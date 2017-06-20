@@ -24,6 +24,7 @@
 		Vector2,
 		Vector3,
 		Vector4,
+		Quaternion,
 		ByteArray,
 		Color,
 		Color32,
@@ -175,6 +176,10 @@
 						type[i] = netvrkType.Vector4;
 						tmpBuffer = SerializeVector4((Vector4)data[i]);
 						break;
+					case "Quaternion":
+						type[i] = netvrkType.Quaternion;
+						tmpBuffer = SerializeQuaternion((Quaternion)data[i]);
+						break;
 					case "Byte[]":
 						type[i] = netvrkType.ByteArray;
 						short len2 = (short)((byte[])data[i]).Length;
@@ -264,6 +269,9 @@
 					break;
 				case "Vector4":
 					tmpBuffer = SerializeVector4((Vector4)data);
+					break;
+				case "Quaternion":
+					tmpBuffer = SerializeQuaternion((Quaternion)data);
 					break;
 				case "Byte[]":
 					short len2 = (short)((byte[])data).Length;
@@ -383,6 +391,9 @@
 						case netvrkType.Vector4:
 							tmpData = DeserializeVector4(br.ReadBytes(16));
 							break;
+						case netvrkType.Quaternion:
+							tmpData = DeserializeQuaternion(br.ReadBytes(16));
+							break;
 						case netvrkType.Color:
 							tmpData = DeserializeColor(br.ReadBytes(12));
 							break;
@@ -453,6 +464,9 @@
 				case "Vector4":
 					tmpData = DeserializeVector4(br.ReadBytes(16));
 					break;
+				case "Quaternion":
+					tmpData = DeserializeQuaternion(br.ReadBytes(16));
+					break;
 				case "Color":
 					tmpData = DeserializeColor(br.ReadBytes(12));
 					break;
@@ -496,6 +510,18 @@
 			Buffer.BlockCopy(BitConverter.GetBytes(vector.y), 0, buffer, 4, 4);
 			Buffer.BlockCopy(BitConverter.GetBytes(vector.z), 0, buffer, 8, 4);
 			Buffer.BlockCopy(BitConverter.GetBytes(vector.w), 0, buffer, 12, 4);
+
+			return buffer;
+		}
+
+		private static byte[] SerializeQuaternion(Quaternion quaternion)
+		{
+			byte[] buffer = new byte[16];
+			
+			Buffer.BlockCopy(BitConverter.GetBytes(quaternion.x), 0, buffer, 0, 4);
+			Buffer.BlockCopy(BitConverter.GetBytes(quaternion.y), 0, buffer, 4, 4);
+			Buffer.BlockCopy(BitConverter.GetBytes(quaternion.z), 0, buffer, 8, 4);
+			Buffer.BlockCopy(BitConverter.GetBytes(quaternion.w), 0, buffer, 12, 4);
 
 			return buffer;
 		}
@@ -560,6 +586,20 @@
 				vector.w = br.ReadSingle();
 			}
 			return vector;
+		}
+
+		private static Quaternion DeserializeQuaternion(byte[] data)
+		{
+			Quaternion quaternion;
+			using (MemoryStream memoryStream = new MemoryStream(data))
+			{
+				BinaryReader br = new BinaryReader(memoryStream);
+				quaternion.x = br.ReadSingle();
+				quaternion.y = br.ReadSingle();
+				quaternion.z = br.ReadSingle();
+				quaternion.w = br.ReadSingle();
+			}
+			return quaternion;
 		}
 
 		private static Color DeserializeColor(byte[] data)
