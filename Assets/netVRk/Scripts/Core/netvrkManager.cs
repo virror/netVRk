@@ -27,9 +27,10 @@
 		End
 	}
 
+	[DisallowMultipleComponent]
 	public class netvrkManager : MonoBehaviour
 	{
-		private ushort maxId = 1;
+		private static ushort maxId = 0;
 		private static netvrkManager instance;
 		private static Dictionary<ushort, ObjData> objList = new Dictionary<ushort, ObjData>();
 		private static List<netvrkPlayer> playerList = new List<netvrkPlayer>();
@@ -37,6 +38,9 @@
 		private static bool isMasterClient = false;
 		private static bool isConnected = false;
 		private static byte maxPlayersAllowed = 0;
+#pragma warning disable 0414
+		private Callback<P2PSessionRequest_t> p2PSessionRequestCallback;
+#pragma warning restore 0414
 
 		//Events
 		public static event netVRkConnectionHandler connectSuccess;
@@ -75,18 +79,21 @@
 
 		public static ushort GetNewViewId()
 		{
-			instance.maxId++;
-			return instance.maxId;
-		}
-
-		public static void AddObj(ushort id, netvrkView obj, GameObject go)
-		{
-			MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
+			maxId++;
 			ObjData data = new ObjData();
 			data.methods = new List<string>();
 			data.scripts = new List<MonoBehaviour>();
 			data.rpcMethods = new List<MethodInfo>();
-			data.netObj = obj;
+			data.netObj = null;
+			objList.Add(maxId, data);
+			return maxId;
+		}
+
+		public static void AddView(ushort id, netvrkView view, GameObject go)
+		{		
+			MonoBehaviour[] scripts = go.GetComponents<MonoBehaviour>();
+			ObjData data = objList[id];
+			data.netObj = view;
 
 			foreach (MonoBehaviour script in scripts)
 			{
@@ -99,17 +106,16 @@
 					{
 						data.methods.Add(objectFields[i].Name);
 						data.scripts.Add(script);
-						data.rpcMethods.Add(type.GetMethod(objectFields[i].Name));
+						data.rpcMethods.Add(objectFields[i]);
 					}
 				}
-				MethodInfo info = type.GetMethod("OnNetvrkReadSyncStream");
+				MethodInfo info = type.GetMethod("OnNetvrkReadSyncStream", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 				if(info != null)
 				{
 					data.syncMethod = info;
 					data.syncScript = script;
 				}
 			}
-			objList.Add(id, data);
 		}
 
 		public static void SendRpc(ushort objId, string method, object[] data, netvrkTargets targets, int channel = 0)
@@ -133,8 +139,8 @@
 			}
 			if(targets == netvrkTargets.All)
 			{
-				GameObject go = objList[objId].netObj.gameObject;
-				go.SendMessage(method, data, SendMessageOptions.RequireReceiver);
+				ObjData objData = objList[objId];
+				objData.rpcMethods[methodId].Invoke(objData.scripts[methodId], data);
 			}
 		}
 
@@ -304,15 +310,19 @@
 		{
 			if (instance != null)
 			{
-				Debug.LogWarning("netVRk: You can only have one netvrkManager object in the scene!");
+				Debug.LogError("netVRk: You can only have one netvrkManager object in the scene!");
 				return;
 			}
 			instance = this;
 			DontDestroyOnLoad(gameObject);
+			p2PSessionRequestCallback = Callback<P2PSessionRequest_t>.Create(OnP2PSessionRequest);
+			AddInternals();
+			//SceneManager.activeSceneChanged += OnActiveSceneChanged;
+		}
 
-			Callback<P2PSessionRequest_t>.Create(OnP2PSessionRequest);
+		private void AddInternals()
+		{
 			ObjData data = new ObjData();
-			data.netObj = null;
 			data.methods = new List<string>();
 			data.methods.Add("InstantiatePrefab");
 			data.methods.Add("ConnectionRequest");
@@ -322,8 +332,6 @@
 			data.methods.Add("Tick");
 			data.methods.Add("Tock");
 			objList.Add(0, data);
-
-			SceneManager.activeSceneChanged += OnActiveSceneChanged;
 		}
 
 		private void Update()
@@ -381,10 +389,11 @@
 			return null;
 		}
 
-		private void OnActiveSceneChanged(Scene arg0, Scene arg1)
+		/*private void OnActiveSceneChanged(Scene arg0, Scene arg1)
 		{
-			
-		}
+			objList.Clear();
+			AddInternals();
+		}*/
 
 		private bool IsExpectingClient(CSteamID clientId)
 		{

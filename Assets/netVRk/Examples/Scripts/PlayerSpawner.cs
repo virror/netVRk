@@ -22,7 +22,7 @@
 		}
 
 		[netvrkRpc]
-		private void SpawnNetworkPlayer(string path, Vector3 position, ushort viewId)
+		public void SpawnNetworkPlayer(string path, Vector3 position, ushort viewId)
 		{
 			GameObject go = (GameObject)Resources.Load(path);
 			GameObject instanceGo = Instantiate(go, position, Quaternion.identity);

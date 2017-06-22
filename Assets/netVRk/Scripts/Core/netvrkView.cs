@@ -17,14 +17,14 @@
 
 		public ushort id = 0;
 
-		private void Start ()
+		private void Awake ()
 		{
 			if(id == 0)
 			{
 				id = netvrkManager.GetNewViewId();
 			}
 
-			netvrkManager.AddObj(id, this, gameObject);
+			netvrkManager.AddView(id, this, gameObject);
 		}
 
 		public void Rpc(string method, netvrkTargets targets, int channel = 0, params object[] message)

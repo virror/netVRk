@@ -76,7 +76,7 @@
 		public static byte[] SerializeRpc(ushort objId, byte methodId, object[] data)
 		{
 			byte[] bytes = new byte[0];
-			
+
 			if(data != null)
 			{
 				bytes = SerializeData(data);
@@ -113,7 +113,7 @@
 				{
 					typeName = data[i].GetType().Name;
 				}
-
+			
 				switch(typeName)
 				{
 					case "Byte":
@@ -203,7 +203,7 @@
 				byteSize += tmpBuffer.Length + 1;
 			}
 
-			byte[] bytes = new byte[byteSize + 1];
+			byte[] bytes = new byte[byteSize];
 
 			using (MemoryStream memoryStream = new MemoryStream(bytes))
 			{
