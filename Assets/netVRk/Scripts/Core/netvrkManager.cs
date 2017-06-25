@@ -34,7 +34,8 @@
 		private static netvrkManager instance;
 		private static Dictionary<ushort, ObjData> objList = new Dictionary<ushort, ObjData>();
 		private static List<netvrkPlayer> playerList = new List<netvrkPlayer>();
-		private static netvrkPlayer masterClient;
+		private static netvrkPlayer masterClient = null;
+		private static netvrkPlayer localClient = null;
 		private static bool isMasterClient = false;
 		private static bool isConnected = false;
 		private static byte maxPlayersAllowed = 0;
@@ -58,7 +59,9 @@
 			PlayerJoin,
 			PlayerDisconnect,
 			Tick,
-			Tock
+			Tock,
+			SetOwnership,
+			AskOwnership
 		}
 
 		private struct ObjData
@@ -196,6 +199,7 @@
 
 			GameObject instanceGo = Instantiate(go, position, rotation);
 			netvrkView netView = instanceGo.GetComponent<netvrkView>();
+			netView.owner = localClient;
 			netView.instantiateData = data;
 		}
 
@@ -219,6 +223,11 @@
 			return masterClient;
 		}
 
+		public static netvrkPlayer GetLocalClient()
+		{
+			return localClient;
+		}
+
 		public static void CreateGame(byte maxPlayers)
 		{
 			if(isConnected)
@@ -229,6 +238,7 @@
 			isMasterClient = true;
 			isConnected = true;
 			masterClient = new netvrkPlayer(SteamUser.GetSteamID(), true, true);
+			localClient = masterClient;
 			maxPlayersAllowed = maxPlayers;
 			instance.StartCoroutine("TickLoop");
 		}
@@ -304,6 +314,24 @@
 			{
 				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes2, (uint)bytes2.Length, EP2PSend.k_EP2PSendReliable, 0);
 			}
+		}
+
+		public static void SendOwnership(ushort viewId, netvrkPlayer player)
+		{
+			object[] data = {viewId, player.SteamId.m_SteamID};
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.SetOwnership, data);
+			for(int i = 0; i < playerList.Count; i++)
+			{
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);
+			}
+		}
+
+		public static void RequestOwnership(netvrkView view)
+		{
+			object[] data = {view.id};
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.AskOwnership, data);
+	
+			SteamNetworking.SendP2PPacket(view.owner.SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);
 		}
 
 		private void Awake()
@@ -475,12 +503,14 @@
 			Vector3 position = (Vector3)internalData.data[0];
 			Quaternion rotation = Quaternion.Euler((Vector3)internalData.data[1]);
 			string prefabName = (string)internalData.data[2];
+			netvrkPlayer owner = IsInPlayerList(internalData.remoteId);
 
 			GameObject go = (GameObject)Resources.Load(prefabName);
 			GameObject instanceGo = Instantiate(go, position, rotation);
 			netvrkView netView = instanceGo.GetComponent<netvrkView>();
 			netView.isMine = false;
 			netView.isSceneView = false;
+			netView.owner = owner;
 			int len = internalData.data.Length - 3;
 			if(len > 0)
 			{
@@ -518,6 +548,7 @@
 		{
 			CancelInvoke("ConnectionFail");
 			masterClient = new netvrkPlayer(internalData.remoteId, false, true);
+			localClient = new netvrkPlayer(SteamUser.GetSteamID(), false, true);
 			isConnected = true;
 
 			if(IsInPlayerList(masterClient.SteamId) == null)
@@ -577,6 +608,39 @@
 			{
 				masterClient.tick = true;
 			}
+			yield return null;
+		}
+
+		private IEnumerator SetOwnership(InternalData internalData)
+		{
+			ushort viewId = (ushort)internalData.data[0];
+			netvrkPlayer player = IsInPlayerList(new CSteamID((ulong)internalData.data[1]));
+			netvrkView netView = objList[viewId].netObj;
+			if(player.Equals(localClient))
+			{
+				netView.isMine = true;
+				netView.owner = localClient;
+			}
+			else
+			{
+				netView.owner = player;
+			}
+			yield return null;
+		}
+
+		private IEnumerator AskOwnership(InternalData internalData)
+		{
+			ushort viewId = (ushort)internalData.data[0];
+			object[] data = {viewId, internalData.remoteId.m_SteamID};
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.SetOwnership, data);
+
+			// TODO: Decide if transfer or not
+
+			for(int i = 0; i < playerList.Count; i++)
+			{
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes, (uint)bytes.Length, EP2PSend.k_EP2PSendReliable, 0);
+			}
+
 			yield return null;
 		}
 

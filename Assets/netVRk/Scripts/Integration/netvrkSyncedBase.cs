@@ -29,8 +29,11 @@
 		{
 			while(true)
 			{
-				netvrkStream stream = netView.GetStream();
-				OnNetvrkWriteSyncStream(stream);
+				if(netView.isMine)
+				{
+					netvrkStream stream = netView.GetStream();
+					OnNetvrkWriteSyncStream(stream);
+				}
 				yield return new WaitForSeconds(1 / syncPerSec);
 			}
 		}

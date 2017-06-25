@@ -14,8 +14,8 @@
 		public bool isMine = true;
 		public bool isSceneView = true;
 		public object[] instantiateData = null;
-
 		public ushort id = 0;
+		public netvrkPlayer owner;
 
 		private void Awake ()
 		{
@@ -35,6 +35,18 @@
 		public void Rpc(string method, netvrkPlayer player, int channel = 0, params object[] message)
 		{
 			netvrkManager.SendRpc(id, method, message, player, channel);
+		}
+
+		public void TransferOwnership(netvrkPlayer player)
+		{
+			owner = player;
+			isMine = false;
+			netvrkManager.SendOwnership(id, player);
+		}
+
+		public void RequestOwnership()
+		{
+			netvrkManager.RequestOwnership(this);
 		}
 
 		public netvrkStream GetStream()

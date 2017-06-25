@@ -1,7 +1,9 @@
 ﻿namespace netvrk
 {
 	using Steamworks;
-	public class netvrkPlayer
+	using System;
+
+	public class netvrkPlayer : IEquatable<netvrkPlayer>
 	{
 		public bool tick = true;
 
@@ -29,5 +31,14 @@
 
 		public bool IsMasterClient
 		{ get{ return isMasterClient; }}
+
+		public bool Equals(netvrkPlayer other)
+		{
+			if(other == null)
+			{
+				return false;
+			}
+			return name == other.name && steamId.m_SteamID == other.steamId.m_SteamID;
+		}
 	}
 }
