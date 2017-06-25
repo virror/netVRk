@@ -53,9 +53,9 @@
 
 		public enum InternalMethod
 		{
-			Instantiate,
-			ConnectRequest,
-			ConnectResponse,
+			InstantiatePrefab,
+			ConnectionRequest,
+			ConnectionResponse,
 			PlayerJoin,
 			PlayerDisconnect,
 			Tick,
@@ -190,7 +190,7 @@
 			internalData[1] = rotation.eulerAngles;
 			internalData[2] = prefabName;
 			Array.Copy(data, 0, internalData, 3, data.Length);
-			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.Instantiate, internalData);
+			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.InstantiatePrefab, internalData);
 
 			for(int i = 0; i < playerList.Count; i++)
 			{
@@ -258,7 +258,7 @@
 
 				if(friendName == steamName)
 				{
-					SendInternalRpc(friendSteamId, InternalMethod.ConnectRequest);
+					SendInternalRpc(friendSteamId, InternalMethod.ConnectionRequest);
 				}
 				instance.Invoke("ConnectionFail", 5);
 			}
@@ -352,13 +352,8 @@
 		{
 			ObjData data = new ObjData();
 			data.methods = new List<string>();
-			data.methods.Add("InstantiatePrefab");
-			data.methods.Add("ConnectionRequest");
-			data.methods.Add("ConnectionResponse");
-			data.methods.Add("PlayerJoin");
-			data.methods.Add("PlayerDisconnect");
-			data.methods.Add("Tick");
-			data.methods.Add("Tock");
+			string[] enumNames = Enum.GetNames(typeof(InternalMethod));
+			data.methods.AddRange(enumNames);
 			objList.Add(0, data);
 		}
 
@@ -527,7 +522,7 @@
 			byte[] bytes = netvrkSerialization.SerializeInternal((byte)InternalMethod.PlayerJoin, data);
 			netvrkPlayer newPlayer = new netvrkPlayer(clientId, false, false);
 
-			SendInternalRpc(clientId, InternalMethod.ConnectResponse);
+			SendInternalRpc(clientId, InternalMethod.ConnectionResponse);
 			
 			for(int i = 0; i < playerList.Count; i++)
 			{
