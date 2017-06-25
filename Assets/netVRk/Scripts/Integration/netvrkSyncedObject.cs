@@ -10,7 +10,6 @@
 		{
 			stream.Write(transform.position);
 			stream.Write(transform.rotation);
-			netView.WriteSyncStream(stream);
 		}
 
 		protected override void OnNetvrkReadSyncStream(netvrkStream stream)

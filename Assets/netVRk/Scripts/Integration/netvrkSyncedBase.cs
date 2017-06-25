@@ -33,6 +33,7 @@
 				{
 					netvrkStream stream = netView.GetStream();
 					OnNetvrkWriteSyncStream(stream);
+					netView.WriteSyncStream(stream);
 				}
 				yield return new WaitForSeconds(1 / syncPerSec);
 			}

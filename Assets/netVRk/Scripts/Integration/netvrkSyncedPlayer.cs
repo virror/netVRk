@@ -52,7 +52,6 @@
 			stream.Write(leftHand.rotation);
 			stream.Write(rightHand.position);
 			stream.Write(rightHand.rotation);
-			netView.WriteSyncStream(stream);
 		}
 
 		protected override void OnNetvrkReadSyncStream(netvrkStream stream)
