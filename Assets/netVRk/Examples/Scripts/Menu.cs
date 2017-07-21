@@ -53,7 +53,7 @@ public class Menu : MonoBehaviour
 	{
 		netvrkStream stream = netView.GetStream();
 		stream.Write(467);
-		netView.WriteSyncStream(stream);
+		netView.WriteSyncStream(stream, netvrkSendMethod.Unreliable);
 	}
 
 	public void OnNetvrkReadSyncStream(netvrkStream stream)

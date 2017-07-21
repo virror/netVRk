@@ -54,9 +54,9 @@
 			return netvrkManager.GetStream(id);
 		}
 
-		public void WriteSyncStream(netvrkStream stream)
+		public void WriteSyncStream(netvrkStream stream, netvrkSendMethod sendMethod)
 		{
-			netvrkManager.WriteSyncStream(stream);
+			netvrkManager.WriteSyncStream(stream, sendMethod);
 		}
 	}
 }

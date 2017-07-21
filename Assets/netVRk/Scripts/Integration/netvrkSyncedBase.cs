@@ -7,16 +7,13 @@
 	public abstract class netvrkSyncedBase : MonoBehaviour
 	{
 		public int syncPerSec = 10;
+		public netvrkSendMethod sendMethod = netvrkSendMethod.Unreliable;
 
 		protected netvrkView netView;
 
-		protected virtual void Awake()
-		{
-			netView = GetComponent<netvrkView>();
-		}
-
 		protected virtual void OnEnable()
 		{
+			netView = GetComponent<netvrkView>();
 			StartCoroutine("SyncLoop");
 		}
 
@@ -33,7 +30,7 @@
 				{
 					netvrkStream stream = netView.GetStream();
 					OnNetvrkWriteSyncStream(stream);
-					netView.WriteSyncStream(stream);
+					netView.WriteSyncStream(stream, sendMethod);
 				}
 				yield return new WaitForSeconds(1 / syncPerSec);
 			}

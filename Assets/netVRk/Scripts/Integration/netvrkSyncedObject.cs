@@ -6,6 +6,14 @@
 
 	public class netvrkSyncedObject : netvrkSyncedBase
 	{
+		private Vector3 newPos;
+		private Quaternion newRot;
+
+		private void Update()
+		{
+			transform.position = Vector3.Lerp(transform.position, newPos, Time.deltaTime * 5);
+			transform.rotation = Quaternion.Lerp(transform.rotation, newRot, Time.deltaTime * 5);
+		}
 		protected override void OnNetvrkWriteSyncStream(netvrkStream stream)
 		{
 			stream.Write(transform.position);
@@ -14,8 +22,8 @@
 
 		protected override void OnNetvrkReadSyncStream(netvrkStream stream)
 		{
-			transform.position = (Vector3)stream.Read(typeof(Vector3));
-			transform.rotation = (Quaternion)stream.Read(typeof(Quaternion));
+			newPos = (Vector3)stream.Read(typeof(Vector3));
+			newRot = (Quaternion)stream.Read(typeof(Quaternion));
 		}
 	}
 }

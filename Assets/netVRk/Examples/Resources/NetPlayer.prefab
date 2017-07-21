@@ -434,6 +434,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   syncPerSec: 10
+  sendMethod: 0
+  networkHead: {fileID: 4442565246967192}
+  networkLeftHand: {fileID: 4512752323802716}
+  networkRightHand: {fileID: 4378202824794126}
 --- !u!135 &135115360148452758
 SphereCollider:
   m_ObjectHideFlags: 1

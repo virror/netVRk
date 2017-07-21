@@ -228,6 +228,11 @@
 			return localClient;
 		}
 
+		public static netvrkView GetViewById(ushort viewId)
+		{
+			return objList[viewId].netObj;
+		}
+
 		public static void CreateGame(byte maxPlayers)
 		{
 			if(isConnected)
@@ -301,7 +306,7 @@
 			return stream;
 		}
 
-		public static void WriteSyncStream(netvrkStream stream)
+		public static void WriteSyncStream(netvrkStream stream, netvrkSendMethod sendMethod)
 		{
 			byte[] buffer = stream.GetStreamData();
 			byte[] bytes2 = new byte[buffer.Length + 3];
@@ -312,7 +317,7 @@
 			Buffer.BlockCopy(buffer, 0, bytes2, 3, buffer.Length);
 			for(int i = 0; i < playerList.Count; i++)
 			{
-				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes2, (uint)bytes2.Length, EP2PSend.k_EP2PSendReliable, 0);
+				SteamNetworking.SendP2PPacket(playerList[i].SteamId, bytes2, (uint)bytes2.Length, netvrkToP2pSend(sendMethod), 0);
 			}
 		}
 
